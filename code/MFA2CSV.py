@@ -64,7 +64,7 @@ class MFA2CSV:
 		-------
 		None
 		"""
-		print("Parsing ORF reference sequence, please wait..")
+		print("Parse ORF reference sequence")
 		root = ET.parse(join(self.xmls_path, xml_file)).getroot()
 		assert "referenceSequence" in root.attrib.keys(), "AssertionError: {} does not contain reference sequence".format(xml_file)
 		self.ref_seq = Seq(root.attrib["referenceSequence"])
@@ -80,6 +80,31 @@ class MFA2CSV:
 
 		print("Parsed reference record:\n {}".format(self.ref_record))
 		print("---")
+
+	def alignment2csv(self, alignment):
+		"""
+		Convert pairwise alignment to csv
+		Credits: following loosy the VCF format tutorial at:
+		https://faculty.washington.edu/browning/beagle/intro-to-vcf.html
+
+		Parameters
+		----------
+		alignment : Bio.Align.MultipleSeqAlignment
+			aligned target sequence
+
+		Returns
+		-------
+		None
+		"""
+		print("Convert alignment of target id {} to variants csv".format(alignment.id))
+		variants_name = self.ref_record.name + "_" + alignment.id + "_variants.csv"
+		with open(join(self.out_path,variants_name),"w") as variants_out:
+			variants_out.write("POS,REF_ID,TARGET_ID,REF,ALT\n")
+			for ref_pos,ref_base in enumerate(self.ref_record.seq):
+				if ref_base != alignment.seq[ref_pos]:  # variant detected
+					print("Write variant")
+					variant_row = ",".join([str(ref_pos+1),self.ref_record.id,alignment.id,ref_base,alignment.seq[ref_pos]])
+					variants_out.write(variant_row + "\n")
 
 	def run(self, xml_file, mfa_file):
 		"""
@@ -100,8 +125,8 @@ class MFA2CSV:
 		self.parse_ref(xml_file)
 		# parse multi-fasta alignment
 		assert is_fasta_file_extension(mfa_file), "AssertionError: Currently supporting only multi-fasta alignment files."
-		print("Parsing MAF, please wait..")
-		multiple_alignments = AlignIO.read(join(self.alignments_path, mfa_file), "fasta")
-		for alignment in multiple_alignments:
-			print(alignment)
+		print("Parse MAF")
+		multiple_alignment = AlignIO.read(join(self.alignments_path, mfa_file), "fasta")
+		for alignment in multiple_alignment:
+			self.alignment2csv(alignment)
 		print("---")

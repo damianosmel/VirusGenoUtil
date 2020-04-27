@@ -99,11 +99,11 @@ class MFA2CSV:
 		print("Convert alignment of target id {} to variants csv".format(alignment.id))
 		variants_name = self.ref_record.name + "_" + alignment.id + "_variants.csv"
 		with open(join(self.out_path,variants_name),"w") as variants_out:
-			variants_out.write("POS,REF_ID,TARGET_ID,REF,ALT\n")
+			variants_out.write("ORF,POS,REF_ID,TARGET_ID,REF,ALT\n")
 			for ref_pos,ref_base in enumerate(self.ref_record.seq):
 				if ref_base != alignment.seq[ref_pos]:  # variant detected
 					print("Write variant")
-					variant_row = ",".join([str(ref_pos+1),self.ref_record.id,alignment.id,ref_base,alignment.seq[ref_pos]])
+					variant_row = ",".join([self.ref_record.name,str(ref_pos+1),self.ref_record.id,alignment.id,ref_base,alignment.seq[ref_pos]])
 					variants_out.write(variant_row + "\n")
 
 	def run(self, xml_file, mfa_file):

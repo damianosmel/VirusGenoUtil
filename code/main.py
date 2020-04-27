@@ -33,6 +33,7 @@ from MFA2CSV import MFA2CSV
 #CTCATTAGTCCTATTAGT---------GTAAAATTAAAACCAGGAATGGATGGCCCAAGG  (not displayed)
 #>Seq4
 #------AGTCCCATTGAAACTGTACCAGTAAAA---------GGA---GATGGCCCAAAG (not displayed)
+"""
 data_path = "/home/damian/Documents/L3S/projects/sars_cov2/data"
 alignments_folder = "test_alignments"
 xmls_folder = "test_orf_xml"
@@ -42,8 +43,9 @@ orf_xml_file = "test_orf.xml"
 ncbi_ref_id = "test_ref"
 #output
 out_path = "/home/damian/Documents/L3S/projects/sars_cov2/test_variants"
-
 """
+
+
 # example for S (Spike) protein and 2 target sequences
 #inputs:
 data_path = "/home/damian/Documents/L3S/projects/sars_cov2/data"
@@ -56,7 +58,7 @@ ncbi_ref_id = "NC_045512.2"
 
 #output:
 out_path = "/home/damian/Documents/L3S/projects/sars_cov2/variants"
-"""
+
 
 print("=== ~ ===")
 MFA2CSV_S_protein_test = MFA2CSV(data_path, alignments_folder, xmls_folder, ncbi_ref_id, out_path)

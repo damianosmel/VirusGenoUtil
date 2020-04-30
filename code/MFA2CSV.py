@@ -2,8 +2,9 @@ from Bio import AlignIO
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 import xml.etree.ElementTree as ET
-from os.path import join
-from utils import create_dir,is_fasta_file_extension
+from os.path import join, exists
+from os import scandir
+from utils import create_dir, is_fasta_file_extension, extract_orf_name
 
 
 class MFA2CSV:
@@ -45,15 +46,15 @@ class MFA2CSV:
 		"""
 		self.data_path = data_path
 		self.out_path = out_path
-		self.alignments_path = join(data_path,alignments_folder)
-		self.xmls_path = join(data_path,xmls_folder)
+		self.alignments_path = join(data_path, alignments_folder)
+		self.xmls_path = join(data_path, xmls_folder)
 		self.ref_id = ncbi_ref_id
 		self.ref_record = None
 		create_dir(out_path)
 
-	def parse_ref(self, xml_file):
+	def parse_ref_xml(self, xml_file):
 		"""
-		Parse reference sequence from xml file (created by virusalign)
+		Parse reference sequence from xml file (created by virulign)
 
 		Parameters
 		----------
@@ -64,9 +65,10 @@ class MFA2CSV:
 		-------
 		None
 		"""
-		print("Parse ORF reference sequence")
+		print("Parse ORF reference sequence from {}".format(xml_file))
 		root = ET.parse(join(self.xmls_path, xml_file)).getroot()
-		assert "referenceSequence" in root.attrib.keys(), "AssertionError: {} does not contain reference sequence".format(xml_file)
+		assert "referenceSequence" in root.attrib.keys(), "AssertionError: {} does not contain reference sequence".format(
+			xml_file)
 		self.ref_seq = Seq(root.attrib["referenceSequence"])
 		ref_name, ref_description = None, None
 		if "name" in root.attrib.keys():
@@ -75,8 +77,8 @@ class MFA2CSV:
 			ref_description = root.attrib["description"]
 
 		self.ref_record = SeqRecord(Seq(root.attrib["referenceSequence"]),
-		                   id=self.ref_id, name=ref_name,
-		                   description=ref_description)
+		                            id=self.ref_id, name=ref_name,
+		                            description=ref_description)
 
 		print("Parsed reference record:\n {}".format(self.ref_record))
 		print("---")
@@ -97,13 +99,20 @@ class MFA2CSV:
 		None
 		"""
 		print("Convert alignment of target id {} to variants csv".format(alignment.id))
-		variants_name = self.ref_record.name + "_" + alignment.id + "_variants.csv"
-		with open(join(self.out_path,variants_name),"w") as variants_out:
-			variants_out.write("ORF,POS,REF_ID,TARGET_ID,REF,ALT\n")
-			for ref_pos,ref_base in enumerate(self.ref_record.seq):
+		# variants_name = self.ref_record.name + "_" + alignment.id + "_variants.csv"
+		variants_name = alignment.id + "_variants.csv"
+		if not exists(join(self.out_path, variants_name)):
+			print("Create file: {}".format(variants_name))
+			with open(join(self.out_path, variants_name), "w") as variants_out:
+				variants_out.write("ORF,POS,REF_ID,TARGET_ID,REF,ALT\n")
+		with open(join(self.out_path, variants_name), "a") as variants_out:
+			print("Update file: {}".format(variants_name))
+			for ref_pos, ref_base in enumerate(self.ref_record.seq):
 				if ref_base != alignment.seq[ref_pos]:  # variant detected
 					print("Write variant")
-					variant_row = ",".join([self.ref_record.name,str(ref_pos+1),self.ref_record.id,alignment.id,ref_base,alignment.seq[ref_pos]])
+					variant_row = ",".join(
+						[self.ref_record.name, str(ref_pos + 1), self.ref_record.id, alignment.id, ref_base,
+						 alignment.seq[ref_pos]])
 					variants_out.write(variant_row + "\n")
 
 	def run(self, xml_file, mfa_file):
@@ -122,11 +131,34 @@ class MFA2CSV:
 		None
 		"""
 		# parse ref
-		self.parse_ref(xml_file)
+		self.parse_ref_xml(xml_file)
 		# parse multi-fasta alignment
-		assert is_fasta_file_extension(mfa_file), "AssertionError: Currently supporting only multi-fasta alignment files."
+		assert is_fasta_file_extension(
+			mfa_file), "AssertionError: Currently supporting only multi-fasta alignment files."
 		print("Parse MAF")
 		multiple_alignment = AlignIO.read(join(self.alignments_path, mfa_file), "fasta")
 		for alignment in multiple_alignment:
 			self.alignment2csv(alignment)
 		print("---")
+
+	def run_multiple_orfs(self):
+		"""
+		Create multiple MFA for ORFs int csv per target sequence
+
+		Parameters
+		----------
+
+		Returns
+		-------
+		"""
+		with scandir(self.alignments_path) as alignments_dir:
+			for alignments_content in alignments_dir:
+				if is_fasta_file_extension(alignments_content.name) and alignments_content.is_file():
+					# parse reference ORF
+					self.parse_ref_xml(extract_orf_name(alignments_content.name) + ".xml")
+					# convert MAF --> variants csv
+					print("Parse MAF for {}".format(alignments_content.name))
+					multiple_alignment = AlignIO.read(join(self.alignments_path, alignments_content.name), "fasta")
+					for alignment in multiple_alignment:
+						self.alignment2csv(alignment)
+					print("---")

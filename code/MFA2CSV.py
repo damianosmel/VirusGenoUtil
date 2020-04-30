@@ -99,7 +99,6 @@ class MFA2CSV:
 		None
 		"""
 		print("Convert alignment of target id {} to variants csv".format(alignment.id))
-		# variants_name = self.ref_record.name + "_" + alignment.id + "_variants.csv"
 		variants_name = alignment.id + "_variants.csv"
 		if not exists(join(self.out_path, variants_name)):
 			print("Create file: {}".format(variants_name))

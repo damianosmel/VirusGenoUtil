@@ -111,7 +111,7 @@ class MFA2CSV:
 				if ref_base != alignment.seq[ref_pos]:  # variant detected
 					print("Write variant")
 					variant_row = ",".join(
-						[self.ref_record.name, str(ref_pos + 1), self.ref_record.id, alignment.id, ref_base,
+						[self.ref_record.name, str(ref_pos), self.ref_record.id, alignment.id, ref_base,
 						 alignment.seq[ref_pos]])
 					variants_out.write(variant_row + "\n")
 

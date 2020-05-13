@@ -1,4 +1,4 @@
-from MFA2CSV import MFA2CSV
+from code.variants.MFA2CSV import MFA2CSV
 
 ### ### ### ### ### ### ### ### ### ### ### ####
 # virus reference + target genomes -> variants #
@@ -21,7 +21,7 @@ from MFA2CSV import MFA2CSV
 ###                    ###
 
 # ===========#
-#   Test    #
+#   Test     #
 # ===========#
 # use as test orf the ORF7b for SARS-cov2 from virulign and create 3 sequences with the following variants:
 # >Ref
@@ -69,6 +69,7 @@ print("=== * ===")
 print("== *** ==")
 """
 
+"""
 # =================================== #
 # Convert MFA to variants csv file    #
 # for all ORFS of 10 target sequences #
@@ -79,11 +80,29 @@ data_path = "/home/damian/Documents/L3S/projects/sars_cov2/data"
 alignments_folder = "alignments"
 xmls_folder = "xmls"
 ncbi_ref_id = "NC_045512.2"
-
 # output #
 out_path = "/home/damian/Documents/L3S/projects/sars_cov2/variants"
 print("==== ====")
 MFA2CSV_all_orf_10targets = MFA2CSV(data_path, alignments_folder, xmls_folder, ncbi_ref_id, out_path)
 MFA2CSV_all_orf_10targets.run_multiple_orfs()
+print("=== * ===")
+print("== *** ==")
+"""
+
+# =================================== #
+# Convert MFA to variants csv file    #
+# for all ORFS of 1 target sequence   #
+# =================================== #
+# input #
+data_path = "/home/damian/Documents/L3S/projects/sars_cov2/data"
+alignments_folder = "alignments"
+xmls_folder = "xmls"
+ncbi_ref_id = "NC_045512.2"
+is_amino_acid = True
+# output #
+out_path = "/home/damian/Documents/L3S/projects/sars_cov2/variants"
+print("==== ====")
+MFA2CSV_all_orf_1target_aa = MFA2CSV(data_path, alignments_folder, xmls_folder, ncbi_ref_id, out_path)
+MFA2CSV_all_orf_1target_aa.run_multiple_orfs()
 print("=== * ===")
 print("== *** ==")

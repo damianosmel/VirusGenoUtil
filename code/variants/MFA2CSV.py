@@ -1,4 +1,4 @@
-from Bio import AlignIO,SeqIO,Entrez
+from Bio import AlignIO,Entrez
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 import xml.etree.ElementTree as ET
@@ -7,7 +7,7 @@ from os import scandir
 from pandas import read_csv
 import urllib
 import time
-from utils import create_dir, is_fasta_file_extension, extract_orf_name
+from code.utils import create_dir, is_fasta_file_extension, extract_orf_name
 
 
 class MFA2CSV:
@@ -53,6 +53,7 @@ class MFA2CSV:
 		self.xmls_path = join(data_path, xmls_folder)
 		self.ref_id = ncbi_ref_id
 		self.ref_record = None
+		self.ref_seq, self.ref_aa = None, None
 		self.entrez_email = open(join(data_path, "email.txt")).read().strip()
 		Entrez.email = self.entrez_email
 		print("Loaded email: {}".format(self.entrez_email))
@@ -77,6 +78,7 @@ class MFA2CSV:
 		assert "referenceSequence" in root.attrib.keys(), "AssertionError: {} does not contain reference sequence".format(
 			xml_file)
 		self.ref_seq = Seq(root.attrib["referenceSequence"])
+		self.ref_aa = None
 		ref_name, ref_description = None, None
 		if "name" in root.attrib.keys():
 			ref_name = root.attrib["name"].strip()
@@ -156,9 +158,9 @@ class MFA2CSV:
 		print("Successfully loaded the following gene annotations: ")
 		print(self.gene_annots[seq_id])
 
-	def alignment2csv(self, alignment):
+	def alignment2csv_nt(self, alignment):
 		"""
-		Convert pairwise alignment to csv
+		Convert MSA nucleic acid alignment to csv
 		Credits: following loosy the VCF format tutorial at:
 		https://faculty.washington.edu/browning/beagle/intro-to-vcf.html
 
@@ -171,7 +173,7 @@ class MFA2CSV:
 		-------
 		None
 		"""
-		print("Convert alignment of target id {} to variants csv".format(alignment.id))
+		print("Convert nucleic acid alignment of target id {} to variants csv".format(alignment.id))
 		if self.ref_record.id not in self.gene_annots:
 			print("Fetch and then parse genbank annotations for target id: {}".format(alignment.id))
 			fetched_genbank = self.fetch_genbank(self.ref_record.id)
@@ -191,6 +193,38 @@ class MFA2CSV:
 					variant_row = ",".join(
 						[self.ref_record.name, str(orf_start_pos + ref_pos), self.ref_record.id, alignment.id, ref_base,
 						 alignment.seq[ref_pos]])
+					variants_out.write(variant_row + "\n")
+
+	def alignment2csv_nt(self,alignment):
+		"""
+		Convert MSA amino acid alignment to csv
+		Credits: following loosy the VCF format tutorial at:
+		https://faculty.washington.edu/browning/beagle/intro-to-vcf.html
+
+		Parameters
+		----------
+		alignment : Bio.Align.MultipleSeqAlignment
+			aligned target sequence
+
+		Returns
+		-------
+		None
+		"""
+		print("Convert amino acid alignment of target id {} to variants csv".format(alignment.id))
+
+		variants_name = alignment.id + "_variants.csv"
+		if not exists(join(self.out_path,variants_name)):
+			print("Create file: {}".format(variants_name))
+			with open(join(self.out_path,variants_name),"w") as variants_out:
+				variants_out.write("ORF,POS,REF_ID,TARGET_ID,REF,ALT\n")
+
+		with open(join(self.out_path,variants_name),"a") as variants_out:
+			print("Update file: {}".format(variants_name))
+			for ref_pos, ref_base in enumerate(self.ref_aa):
+				if ref_base != alignment.seq[ref_pos]: #variant detected
+					print("Write variant")
+					variant_row = ",".join([self.ref_record.name,str(ref_pos+1),self.ref_record.id,alignment.id,ref_base,
+					                       alignment.seq[ref_pos]])
 					variants_out.write(variant_row + "\n")
 
 	def sort_variants(self):
@@ -238,13 +272,44 @@ class MFA2CSV:
 			self.alignment2csv(alignment)
 		print("---")
 
-	def run_multiple_orfs(self):
+	# def run_multiple_orfs(self,is_amino_seq):
+	# 	"""
+	# 	Create multiple MFA for ORFS in csv per target sequence
+	# 	using amino-acid bases
+	#
+	# 	Parameters
+	# 	----------
+	#
+	# 	is_amino_seq : bool
+	# 		the MFA contains amino acid sequence (True),
+	# 		otherwise it contains nucleotide-acid sequence(False)
+	#
+	# 	Returns
+	# 	-------
+	# 	None
+	# 	"""
+	# 	if is_amino_seq:
+	# 		self.run_multiple_orfs_aa()
+	# 	else:
+	# 		self.run_multiple_orfs_nt()
+	#
+	# def run_multiple_orfs_aa(self):
+	#
+	# 	with scandir(self.alignments_path) as alignments_dir:
+	# 		for alignments_content in alignments_dir:
+	# 			if is_fasta_file_extension(alignments_content.name) and alignments_content.is_file():
+	# 				# parse reference ORF
+
+	def run_multiple_orfs(self, is_amino_seq):
 		"""
-		Create multiple MFA for ORFs int csv per target sequence
+		Create multiple MFA for ORFs in csv per target sequence
+		using nucleotide-acid bases
 
 		Parameters
 		----------
-
+		is_amino_seq : bool
+			the MFA contains amino acid sequence (True),
+			otherwise it contains nucleic acid sequence(False)
 		Returns
 		-------
 		None
@@ -257,7 +322,14 @@ class MFA2CSV:
 					# convert MAF --> variants csv
 					print("Parse MAF for {}".format(alignments_content.name))
 					multiple_alignment = AlignIO.read(join(self.alignments_path, alignments_content.name), "fasta")
-					for alignment in multiple_alignment:
-						self.alignment2csv(alignment)
+					if is_amino_seq:
+						# get ORF amino acid sequence
+						assert multiple_alignment[0].id == self.ref_record.name, "AssertError: Code expects first ORF sequence to be the reference"
+						self.ref_aa = multiple_alignment[0].seq
+						for alignment in multiple_alignment[1::]:
+							self.alignment2csv_aa(alignment)
+					else:
+						for alignment in multiple_alignment:
+							self.alignment2csv_nt(alignment)
 					print("---")
 		self.sort_variants()

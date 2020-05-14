@@ -103,6 +103,6 @@ is_amino_acid = True
 out_path = "/home/damian/Documents/L3S/projects/sars_cov2/variants"
 print("==== ====")
 MFA2CSV_all_orf_1target_aa = MFA2CSV(data_path, alignments_folder, xmls_folder, ncbi_ref_id, out_path)
-MFA2CSV_all_orf_1target_aa.run_multiple_orfs()
+MFA2CSV_all_orf_1target_aa.run_multiple_orfs(is_amino_acid)
 print("=== * ===")
 print("== *** ==")

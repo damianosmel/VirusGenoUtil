@@ -1,4 +1,4 @@
-from Bio import AlignIO,Entrez
+from Bio import AlignIO, Entrez
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 import xml.etree.ElementTree as ET
@@ -56,7 +56,7 @@ class MFA2CSV:
 		self.ref_seq, self.ref_aa = None, None
 		self.entrez_email = open(join(data_path, "email.txt")).read().strip()
 		Entrez.email = self.entrez_email
-		print("Loaded email: {}".format(self.entrez_email))
+		print("Load email for Enterz access")
 		self.gene_annots = {}
 		create_dir(out_path)
 
@@ -174,6 +174,8 @@ class MFA2CSV:
 		None
 		"""
 		print("Convert nucleic acid alignment of target id {} to variants csv".format(alignment.id))
+
+		# parse the genbank to get the ORF start end positions
 		if self.ref_record.id not in self.gene_annots:
 			print("Fetch and then parse genbank annotations for target id: {}".format(alignment.id))
 			fetched_genbank = self.fetch_genbank(self.ref_record.id)
@@ -195,7 +197,7 @@ class MFA2CSV:
 						 alignment.seq[ref_pos]])
 					variants_out.write(variant_row + "\n")
 
-	def alignment2csv_nt(self,alignment):
+	def alignment2csv_aa(self, alignment):
 		"""
 		Convert MSA amino acid alignment to csv
 		Credits: following loosy the VCF format tutorial at:
@@ -211,28 +213,41 @@ class MFA2CSV:
 		None
 		"""
 		print("Convert amino acid alignment of target id {} to variants csv".format(alignment.id))
+		# read the genbank to get the start end in order to sort the variants
+		if self.ref_record.id not in self.gene_annots:
+			print("Fetch and then parse genbank annotations for target id: {}".format(alignment.id))
+			fetched_genbank = self.fetch_genbank(self.ref_record.id)
+			self.parse_genbank(self.ref_record.id, fetched_genbank)
 
 		variants_name = alignment.id + "_variants.csv"
-		if not exists(join(self.out_path,variants_name)):
+		if not exists(join(self.out_path, variants_name)):
 			print("Create file: {}".format(variants_name))
-			with open(join(self.out_path,variants_name),"w") as variants_out:
-				variants_out.write("ORF,POS,REF_ID,TARGET_ID,REF,ALT\n")
+			with open(join(self.out_path, variants_name), "w") as variants_out:
+				variants_out.write("ORF,ORF_POS,POS,REF_ID,TARGET_ID,REF,ALT\n")
 
-		with open(join(self.out_path,variants_name),"a") as variants_out:
+		with open(join(self.out_path, variants_name), "a") as variants_out:
 			print("Update file: {}".format(variants_name))
+			orf_start_pos = self.gene_annots[self.ref_record.id][self.ref_record.name]["start"]
+			orf_end_pos = self.gene_annots[self.ref_record.id][self.ref_record.name]["end"]
 			for ref_pos, ref_base in enumerate(self.ref_aa):
-				if ref_base != alignment.seq[ref_pos]: #variant detected
+				if ref_base != alignment.seq[ref_pos]:  # variant detected
 					print("Write variant")
-					variant_row = ",".join([self.ref_record.name,str(ref_pos+1),self.ref_record.id,alignment.id,ref_base,
-					                       alignment.seq[ref_pos]])
+					variant_row = ",".join(
+						[self.ref_record.name, str(orf_start_pos) + str(orf_end_pos), str(ref_pos + 1),
+						 self.ref_record.id,
+						 alignment.id, ref_base,
+						 alignment.seq[ref_pos]])
 					variants_out.write(variant_row + "\n")
 
-	def sort_variants(self):
+	def sort_variants(self, is_amino_seq):
 		"""
 		Sort variants csv
 
 		Parameters
 		----------
+		is_amino_seq : bool
+			The MFA contains amino acid sequence (True),
+			otherwise it contains nucleic acid sequence (False)
 
 		Returns
 		-------
@@ -242,9 +257,13 @@ class MFA2CSV:
 		with scandir(self.out_path) as out_dir:
 			for out_content in out_dir:
 				if out_content.name.endswith(".csv") and out_content.is_file():
-					variants_df = read_csv(join(self.out_path,out_content.name), sep=",", header=0)
-					variants_df.sort_values(by="POS",ascending=True,inplace=True)
-					variants_df.to_csv(join(self.out_path,out_content.name),sep=",",index=False)
+					variants_df = read_csv(join(self.out_path, out_content.name), sep=",", header=0)
+					if is_amino_seq:
+						variants_df.sort_values(by=["ORF_POS", "POS"], ascending=True, inplace=True)
+						variants_df.drop("ORF_POS", axis=1, inplace=True)
+					else:
+						variants_df.sort_values(by="POS", ascending=True, inplace=True)
+					variants_df.to_csv(join(self.out_path, out_content.name), sep=",", index=False)
 
 	def run(self, xml_file, mfa_file):
 		"""
@@ -272,34 +291,6 @@ class MFA2CSV:
 			self.alignment2csv(alignment)
 		print("---")
 
-	# def run_multiple_orfs(self,is_amino_seq):
-	# 	"""
-	# 	Create multiple MFA for ORFS in csv per target sequence
-	# 	using amino-acid bases
-	#
-	# 	Parameters
-	# 	----------
-	#
-	# 	is_amino_seq : bool
-	# 		the MFA contains amino acid sequence (True),
-	# 		otherwise it contains nucleotide-acid sequence(False)
-	#
-	# 	Returns
-	# 	-------
-	# 	None
-	# 	"""
-	# 	if is_amino_seq:
-	# 		self.run_multiple_orfs_aa()
-	# 	else:
-	# 		self.run_multiple_orfs_nt()
-	#
-	# def run_multiple_orfs_aa(self):
-	#
-	# 	with scandir(self.alignments_path) as alignments_dir:
-	# 		for alignments_content in alignments_dir:
-	# 			if is_fasta_file_extension(alignments_content.name) and alignments_content.is_file():
-	# 				# parse reference ORF
-
 	def run_multiple_orfs(self, is_amino_seq):
 		"""
 		Create multiple MFA for ORFs in csv per target sequence
@@ -310,6 +301,7 @@ class MFA2CSV:
 		is_amino_seq : bool
 			the MFA contains amino acid sequence (True),
 			otherwise it contains nucleic acid sequence(False)
+
 		Returns
 		-------
 		None
@@ -324,7 +316,8 @@ class MFA2CSV:
 					multiple_alignment = AlignIO.read(join(self.alignments_path, alignments_content.name), "fasta")
 					if is_amino_seq:
 						# get ORF amino acid sequence
-						assert multiple_alignment[0].id == self.ref_record.name, "AssertError: Code expects first ORF sequence to be the reference"
+						assert multiple_alignment[
+							       0].id.upper() == self.ref_record.name.upper(), "AssertError: Code expects first ORF sequence to be the reference"
 						self.ref_aa = multiple_alignment[0].seq
 						for alignment in multiple_alignment[1::]:
 							self.alignment2csv_aa(alignment)
@@ -332,4 +325,4 @@ class MFA2CSV:
 						for alignment in multiple_alignment:
 							self.alignment2csv_nt(alignment)
 					print("---")
-		self.sort_variants()
+		self.sort_variants(is_amino_seq)

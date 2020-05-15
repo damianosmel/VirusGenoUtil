@@ -91,18 +91,18 @@ print("== *** ==")
 
 # =================================== #
 # Convert MFA to variants csv file    #
-# for all ORFS of 1 target sequence   #
+# for all ORFS of NCBI sequences      #
 # =================================== #
 # input #
 data_path = "/home/damian/Documents/L3S/projects/sars_cov2/data"
-alignments_folder = "alignments"
+alignments_folder = "ncbi_alignments"
 xmls_folder = "xmls"
 ncbi_ref_id = "NC_045512.2"
 is_amino_acid = True
 # output #
-out_path = "/home/damian/Documents/L3S/projects/sars_cov2/variants"
+out_path = "/home/damian/Documents/L3S/projects/sars_cov2/ncbi_variants"
 print("==== ====")
-MFA2CSV_all_orf_1target_aa = MFA2CSV(data_path, alignments_folder, xmls_folder, ncbi_ref_id, out_path)
-MFA2CSV_all_orf_1target_aa.run_multiple_orfs(is_amino_acid)
+MFA2CSV_all_orf_ncbi_target_aa = MFA2CSV(data_path, alignments_folder, xmls_folder, ncbi_ref_id, out_path)
+MFA2CSV_all_orf_ncbi_target_aa.run_multiple_orfs(is_amino_acid)
 print("=== * ===")
 print("== *** ==")

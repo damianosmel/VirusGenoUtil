@@ -21,7 +21,8 @@ window_size = 10
 save_plot = True
 
 # output
-out_path = "/home/damian/Documents/L3S/projects/sars_cov2_Bcells"
+out_path = "/home/damian/Documents/L3S/projects/sars_cov2/exp_epitopes/Bcells"
+create_dir(out_path)
 
 print("==== ====")
 Immunodominance_Bcells = Immunodominance(data_path, proteins_folder, exp_epitopes_folder, out_path)

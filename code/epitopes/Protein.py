@@ -40,7 +40,6 @@ class Protein:
 		self.record = SeqIO.parse(self.protein_file,"fasta").__next__()
 		print("Protein record for {} was created.".format(self.record.id))
 
-
 	def get_record(self):
 		"""
 		Get protein record

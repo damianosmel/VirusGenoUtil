@@ -2,9 +2,10 @@ from os.path import join
 from code.epitopes.Protein import Protein
 from os import scandir
 from code.utils import is_fasta_file_extension
-from pandas import read_csv
+from pandas import read_csv,Series
 import numpy as np
 import matplotlib.pyplot as plt
+
 
 class Immunodominance:
 	"""
@@ -40,7 +41,7 @@ class Immunodominance:
 		None
 		"""
 		self.data_path = data_path
-		self.proteins_path = join(data_path,proteins_folder)
+		self.proteins_path = join(data_path, proteins_folder)
 		self.exp_epitopes_path = join(data_path, exp_epitopes_folder)
 		self.out_path = out_path
 		self.proteins = {}
@@ -69,7 +70,7 @@ class Immunodominance:
 						self.proteins[protein_id] = protein_rec
 		print(self.proteins)
 
-	def load_immunome_csv(self,protein_id):
+	def load_immunome_csv(self, protein_id):
 		"""
 		Load immunome csv
 
@@ -102,16 +103,10 @@ class Immunodominance:
 		None
 		"""
 		print("Sum lower bound RF per epitope and amino-acid position")
-		# get 0-index of epitope start position
-		epitope_start = int(immunome["Mapped Start Position"]) - 1
-		if epitope_start < 0:
-			epitope_start = 0
-		epitope_end = int(immunome["Mapped End Position"])
-		epitope_lower_bound = float(immunome["Lower Bound of 95% CI"])
-		for amino_acid_pos in range(epitope_start,epitope_end):
-			self.proteins[protein_id].letter_annotations["lower_bound_rf"][amino_acid_pos] += epitope_lower_bound
-			if epitope_lower_bound > 0:
-				self.proteins[protein_id].letter_annotations["found_epitopes_count"][amino_acid_pos] += 1.0
+
+		epitope_position = int(immunome["position"]) - 1  # 0-index
+		epitope_lower_bound = float(immunome["lowerbound"])
+		self.proteins[protein_id].letter_annotations["lower_bound_rf"][epitope_position] += epitope_lower_bound
 
 	def compute_sliding_avg(self, protein_id, window_size, save_plot):
 		"""
@@ -132,20 +127,31 @@ class Immunodominance:
 
 		Returns
 		-------
+		list of float
+			sliding_average
 		"""
 		print("Compute sliding average RF")
-		lower_bound_rf = np.asarray(self.proteins[protein_id].letter_annotations["sliding_avg_rf"])
-		average_sliding_window = np.convolve(lower_bound_rf, np.ones((window_size,)) / window_size, mode='valid')
+		lower_bound_rf = np.asarray(self.proteins[protein_id].letter_annotations["lower_bound_rf"])
+		#sliding_average = np.convolve(lower_bound_rf, np.ones((window_size,)) / float(window_size), mode='valid')
+		sliding_average = Series(lower_bound_rf).rolling(window=window_size).mean().iloc[window_size - 1:].values
+		assert len(self.proteins[protein_id].letter_annotations["lower_bound_rf"]) - sliding_average.shape[
+			0] > 0, "AssertionError: lower bound RF values should be larger than sliding average values"
+		sliding_average = np.concatenate((np.array(
+			self.proteins[protein_id].letter_annotations["lower_bound_rf"][0:window_size - 1]), sliding_average),
+			axis=0)
 		if save_plot:
 			fig = plt.figure()
-			plt.plot(average_sliding_window)
+			plt.plot(sliding_average,color='k')
 			plt.axhline(y=0.3, color='k', linestyle='--')
+			plt.ylim(0, 1)
+			plt.xlim(0, len(self.proteins[protein_id].seq))
 			plt.xlabel("Amino acid position")
 			plt.ylabel("Lower bound\nsliding average")
 			plt.title(self.proteins[protein_id].id)
-			avg_plot_name = "3sliding_avg_" + protein_id + ".png"
+			avg_plot_name = "sliding_avg_" + protein_id + ".png"
 			fig.savefig(join(self.out_path, avg_plot_name), bbox_inches='tight', dpi=600)
 			print("Saved {}".format(join(self.out_path, avg_plot_name)))
+		return sliding_average.tolist()
 
 	def set_RF_zero(self, protein_rec):
 		"""
@@ -163,7 +169,6 @@ class Immunodominance:
 		"""
 		print("Init lower bound RF to 0")
 		protein_rec.letter_annotations["lower_bound_rf"] = len(protein_rec.seq) * [0.0]
-		protein_rec.letter_annotations["found_epitopes_count"] = len(protein_rec.seq) * [0.0]
 		protein_rec.letter_annotations["sliding_avg_rf"] = len(protein_rec.seq) * [0.0]
 		return protein_rec
 
@@ -180,23 +185,21 @@ class Immunodominance:
 
 		Returns
 		-------
+		dict of str: Bio.SeqIO.SeqRecord
+			processed proteins
 		"""
 		print("RF=0 -> load(RF,immunome.csv) -> slide window")
 		self.load_proteins()
-		for protein_id,protein_rec in self.proteins.items():
+		for protein_id, protein_rec in self.proteins.items():
+			print("--- ---")
 			print("Process protein: {}".format(protein_id))
 			self.proteins[protein_id] = self.set_RF_zero(protein_rec)
 			# read immuno csv
 			immunome_df = self.load_immunome_csv(protein_id)
 			# sum lower bound RF per position
-			immunome_df.apply(self.sum_per_position,protein_id=protein_id,axis=1)
-			# self.proteins[protein_id].letter_annotations["sliding_avg_rf"] = [lower_bound_sum/epitopes_count for lower_bound_sum, epitopes_count in zip(self.proteins[protein_id].letter_annotations["lower_bound_rf"],self.proteins[protein_id].letter_annotations["found_epitopes_count"])]
+			immunome_df.apply(self.sum_per_position, protein_id=protein_id, axis=1)
+			self.proteins[protein_id].letter_annotations["sliding_avg_rf"] = self.compute_sliding_avg(protein_id,
+			                                                                                          window_size,
+			                                                                                          save_plot)
 
-			for aa_pos in range(len(protein_rec.seq)):
-				if self.proteins[protein_id].letter_annotations["found_epitopes_count"][aa_pos] > 0:
-					pos_avg = self.proteins[protein_id].letter_annotations["lower_bound_rf"][aa_pos] / self.proteins[protein_id].letter_annotations["found_epitopes_count"][aa_pos]
-				else:
-					pos_avg = self.proteins[protein_id].letter_annotations["lower_bound_rf"][aa_pos]
-				self.proteins[protein_id].letter_annotations["sliding_avg_rf"][aa_pos] = pos_avg
-
-			self.compute_sliding_avg(protein_id,window_size,save_plot)
+		return self.proteins

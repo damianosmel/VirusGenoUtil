@@ -22,12 +22,42 @@ class Protein:
 		-------
 		None
 		"""
-		self.protein_record = SeqIO.parse(protein_file, "fasta")
-		print("Protein record for {} was created.".format(self.protein_record.id))
+		self.protein_file = protein_file
+		self.record = None
+		self.short_id = None
 
-	def get_protein_id(self):
+	def load(self):
 		"""
-		Get protein id
+		Load protein
+
+		Parameters
+		----------
+
+		Returns
+		-------
+		None
+		"""
+		self.record = SeqIO.parse(self.protein_file,"fasta").__next__()
+		print("Protein record for {} was created.".format(self.record.id))
+
+
+	def get_record(self):
+		"""
+		Get protein record
+
+		Parameters
+		----------
+
+		Returns
+		-------
+		Bio.SeqIO.SeqRecord
+			loaded protein sequence record
+		"""
+		return self.record
+
+	def get_short_id(self):
+		"""
+		Get protein short id
 
 		Parameters
 		----------
@@ -35,9 +65,9 @@ class Protein:
 		Returns
 		-------
 		str
-			protein id
+			protein short id
 		"""
-		return str(self.protein_record.id)
+		return self.record.id.split("|")[1]
 
 	def get_protein_length(self):
 		"""

@@ -111,7 +111,8 @@ class Immunodominance:
 	def compute_sliding_avg(self, protein_id, window_size, save_plot):
 		"""
 		Average over sliding window to define contiguous regions for lower bound CI of RF
-
+		For first window_size-1 assign the same average equal to average(elements(1:window_size))
+		as shown in movmean in matlab
 		Reference: Supplementary of Grifoni et al.
 
 		Credits: https://stackoverflow.com/questions/13728392/moving-average-or-running-mean
@@ -132,13 +133,14 @@ class Immunodominance:
 		"""
 		print("Compute sliding average RF")
 		lower_bound_rf = np.asarray(self.proteins[protein_id].letter_annotations["lower_bound_rf"])
-		#sliding_average = np.convolve(lower_bound_rf, np.ones((window_size,)) / float(window_size), mode='valid')
 		sliding_average = Series(lower_bound_rf).rolling(window=window_size).mean().iloc[window_size - 1:].values
 		assert len(self.proteins[protein_id].letter_annotations["lower_bound_rf"]) - sliding_average.shape[
 			0] > 0, "AssertionError: lower bound RF values should be larger than sliding average values"
-		sliding_average = np.concatenate((np.array(
-			self.proteins[protein_id].letter_annotations["lower_bound_rf"][0:window_size - 1]), sliding_average),
-			axis=0)
+		
+		average_first_elements = sum(self.proteins[protein_id].letter_annotations["lower_bound_rf"][0:window_size]) / len(self.proteins[protein_id].letter_annotations["lower_bound_rf"][0:window_size])
+		first_elements = np.empty(window_size-1)
+		first_elements.fill(average_first_elements)
+		sliding_average = np.concatenate((first_elements, sliding_average), axis=0)
 		if save_plot:
 			fig = plt.figure()
 			plt.plot(sliding_average,color='k')

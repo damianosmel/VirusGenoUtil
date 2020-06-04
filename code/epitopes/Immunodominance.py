@@ -1,14 +1,13 @@
 from code.epitopes.Protein import Protein
 from code.utils import is_fasta_file_extension
-
 from os.path import join
 from os import scandir
 from pandas import read_csv, Series
 import numpy as np
 import matplotlib.pyplot as plt
-from Bio import Seq,SeqIO
+from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
-from Bio.Alphabet import IUPAC
+
 
 class Immunodominance:
 	"""
@@ -258,7 +257,8 @@ class Immunodominance:
 			reg_start, reg_end = region[0], region[-1] + 1
 			if reg_end - reg_start >= 10:
 				immunodom_frag = protein_record.seq[reg_start:reg_end + 1]
-				frag_record = SeqRecord(immunodom_frag, id=protein_id + "_immunodom_frag_"+str(i + 1), name="", description="")
+				max_lower_bound = float("{:.4f}".format(max(protein_record.letter_annotations["sliding_avg_lower_bound"][reg_start:reg_end + 1])))
+				frag_record = SeqRecord(immunodom_frag, id=protein_id + "_immunodom_frag_"+str(i + 1), name="", description="max_lower_bound="+str(max_lower_bound))
 				immunodom_frags.append(frag_record)
 			else:
 				print("Skip region with less than 10 amino-acids")

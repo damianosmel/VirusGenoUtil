@@ -1,10 +1,13 @@
-from os.path import join
 from code.epitopes.Protein import Protein
-from os import scandir
 from code.utils import is_fasta_file_extension
-from pandas import read_csv,Series
+
+from os.path import join
+from os import scandir
+from pandas import read_csv, Series
 import numpy as np
 import matplotlib.pyplot as plt
+from Bio import SeqIO
+from Bio.SeqRecord import SeqRecord
 
 
 class Immunodominance:
@@ -136,14 +139,16 @@ class Immunodominance:
 		sliding_average = Series(lower_bound_rf).rolling(window=window_size).mean().iloc[window_size - 1:].values
 		assert len(self.proteins[protein_id].letter_annotations["lower_bound_rf"]) - sliding_average.shape[
 			0] > 0, "AssertionError: lower bound RF values should be larger than sliding average values"
-		
-		average_first_elements = sum(self.proteins[protein_id].letter_annotations["lower_bound_rf"][0:window_size]) / len(self.proteins[protein_id].letter_annotations["lower_bound_rf"][0:window_size])
-		first_elements = np.empty(window_size-1)
+
+		average_first_elements = sum(
+			self.proteins[protein_id].letter_annotations["lower_bound_rf"][0:window_size]) / len(
+			self.proteins[protein_id].letter_annotations["lower_bound_rf"][0:window_size])
+		first_elements = np.empty(window_size - 1)
 		first_elements.fill(average_first_elements)
 		sliding_average = np.concatenate((first_elements, sliding_average), axis=0)
 		if save_plot:
 			fig = plt.figure()
-			plt.plot(sliding_average,color='k')
+			plt.plot(sliding_average, color='k')
 			plt.axhline(y=0.3, color='k', linestyle='--')
 			plt.ylim(0, 1)
 			plt.xlim(0, len(self.proteins[protein_id].seq))
@@ -171,10 +176,10 @@ class Immunodominance:
 		"""
 		print("Init lower bound RF to 0")
 		protein_rec.letter_annotations["lower_bound_rf"] = len(protein_rec.seq) * [0.0]
-		protein_rec.letter_annotations["sliding_avg_rf"] = len(protein_rec.seq) * [0.0]
+		protein_rec.letter_annotations["sliding_avg_lower_bound"] = len(protein_rec.seq) * [0.0]
 		return protein_rec
 
-	def process_all_proteins(self, window_size, save_plot):
+	def process_all_proteins(self, window_size, save_plot, sliding_avg_cutoff, save_immunodominant_reg):
 		"""
 		Process Immunodominance regions for each loaded protein
 
@@ -183,7 +188,11 @@ class Immunodominance:
 		window_size : int
 			sliding window size
 		save_plot : bool
-			create and save plot of sliding window values
+			create and save plot of sliding window values (True) otherwise don't save (False)
+		sliding_avg_cutoff : float
+			cutoff of sliding average of lower bound RF to find immunodominant regions
+		save_immunodominant_reg : bool
+			save sequence of each immunodominant region (True) otherwise don't save (False)
 
 		Returns
 		-------
@@ -200,8 +209,59 @@ class Immunodominance:
 			immunome_df = self.load_immunome_csv(protein_id)
 			# sum lower bound RF per position
 			immunome_df.apply(self.sum_per_position, protein_id=protein_id, axis=1)
-			self.proteins[protein_id].letter_annotations["sliding_avg_rf"] = self.compute_sliding_avg(protein_id,
-			                                                                                          window_size,
-			                                                                                          save_plot)
-
+			self.proteins[protein_id].letter_annotations["sliding_avg_lower_bound"] = self.compute_sliding_avg(
+				protein_id,
+				window_size,
+				save_plot)
+			self.find_immunodominant_regions(protein_id, sliding_avg_cutoff, save_immunodominant_reg)
 		return self.proteins
+
+	def find_immunodominant_regions(self, protein_id, sliding_avg_cutoff, save_regions):
+		"""
+		Find immunodominant regions in input protein
+
+		Parameters
+		----------
+		protein_id : str
+			id of protein to compute average sliding window
+		sliding_avg_cutoff : float
+			cutoff of sliding average of lower bound RF to find immunodominant regions
+		save_regions : bool
+			save identified regions in fasta file (True), otherwise don't save (False)
+
+		Returns
+		-------
+		None
+		"""
+		print("Identify and save immunodominant regions")
+		protein_record = self.proteins[protein_id]
+		# get all positions with average >= cutoff
+		immunodominant_positions = [aa_pos for aa_pos, lower_bound_avg in
+		                            enumerate(protein_record.letter_annotations["sliding_avg_lower_bound"]) if
+		                            lower_bound_avg >= sliding_avg_cutoff]
+
+		# find consecutive position to define a region
+		immunodominant_regions, current_region = [], []
+		previous_pos = immunodominant_positions[0]
+		for aa_pos in immunodominant_positions:
+			if aa_pos - previous_pos > 1:  # create a new subregion
+				immunodominant_regions.append(current_region)
+				current_region = [aa_pos]
+			else:
+				current_region.append(aa_pos)
+			previous_pos = aa_pos
+		immunodominant_regions.append(current_region)
+
+		# save protein fragment for each immunodominant region
+		immunodom_frags = []
+		for i, region in enumerate(immunodominant_regions):
+			reg_start, reg_end = region[0], region[-1] + 1
+			if reg_end - reg_start >= 10:
+				immunodom_frag = protein_record.seq[reg_start:reg_end + 1]
+				frag_record = SeqRecord(immunodom_frag, 'immunodominant_fragment_%i' % (i + 1), '', '')
+				immunodom_frags.append(frag_record)
+			else:
+				print("Skip region with less than 10 amino-acids")
+		if save_regions:
+			SeqIO.write(immunodom_frags, join(self.out_path, "immunodom_regions_" + protein_id + ".fasta"), "fasta")
+			print("Saved regions at: {}".format(join(self.out_path, "immunodom_regions_" + protein_id + ".fasta")))

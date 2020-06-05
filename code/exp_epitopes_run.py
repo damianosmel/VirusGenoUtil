@@ -22,20 +22,21 @@ window_size = 10
 save_plot = False  # True
 sliding_avg_cutoff = 0.3
 save_immunodominant_reg = True
-ncbi_ids = {"relative_organsim": "NC_004718.3", "target_organism": "NC_045512.2"}
 # output
 out_path = "/home/damian/Documents/L3S/projects/sars_cov2/exp_epitopes/Bcells"
 create_dir(out_path)
 
-print("==== ====")
-Immunodominance_Bcells = Immunodominance(data_path, query_proteins_folder, exp_epitopes_folder, out_path)
-processed_proteins = Immunodominance_Bcells.process_all_proteins(window_size, save_plot, sliding_avg_cutoff,
-                                                                 save_immunodominant_reg)
-
 # print("==== ====")
-# subject_proteins_folder = "sars_cov2_proteins"
-# blast_folder = "blast"
-# HomologyBasedEpitopes_Bcells = HomologyBasedEpitopes(data_path, subject_proteins_folder, blast_folder, ncbi_ids, out_path)
-# HomologyBasedEpitopes_Bcells.find_epitopes()
+# Immunodominance_Bcells = Immunodominance(data_path, query_proteins_folder, exp_epitopes_folder, out_path)
+# processed_proteins = Immunodominance_Bcells.process_all_proteins(window_size, save_plot, sliding_avg_cutoff,
+#                                                                  save_immunodominant_reg)
+
+print("==== ====")
+# input
+subject_proteins_folder = "sars_cov2_proteins"
+blast_folder = "blast"
+ncbi_ids = {"relative_organism": "NC_004718.3", "target_organism": "NC_045512.2"}
+HomologyBasedEpitopes_Bcells = HomologyBasedEpitopes(ncbi_ids, data_path, subject_proteins_folder, blast_folder, out_path)
+HomologyBasedEpitopes_Bcells.find_epitopes()
 print("=== * ===")
 print("== *** ==")

@@ -1,8 +1,9 @@
 from os.path import join, exists
 from os import scandir
 from code.utils import is_fasta_file_extension
-
 from pandas import read_csv
+from Bio import SeqIO
+
 
 class HomologyBasedEpitopes:
 	"""
@@ -14,11 +15,11 @@ class HomologyBasedEpitopes:
 	predict candidate targets for immune responses to SARS-CoV-2." Cell host & microbe (2020).
 
 	Example:
-	input: BLAST file of immunodominant regions of sars cov1 to sars cov2
+	input: BLAST file of immunodominant regions of relative virus (sars cov1) to target virus (sars cov2)
 	output: file containing the aligned sequences, response frequency and identity
 	"""
 
-	def __init__(self, ncbi_ids, data_path, subject_proteins_folder, blast_folder, out_path):
+	def __init__(self, ncbi_ids, data_path, target_proteins_folder, blast_folder, out_path):
 		"""
 		HomologyBasedEpitopes constructor
 
@@ -28,16 +29,20 @@ class HomologyBasedEpitopes:
 			dictionary to keep the NCBI ids for target organism and its close-related
 		data_path : str
 			input data root
-		subject_proteins_folder : str
-			subject virus proteins folder
+		target_proteins_folder : str
+			target virus proteins folder
 		blast_folder : str
 			blast folder
 		out_path : str
 			output data root
+
+		Returns
+		-------
+		None
 		"""
 		self.ncbi_ids = ncbi_ids
 		self.data_path = data_path
-		self.subject_proteins_folder = join(data_path, subject_proteins_folder)
+		self.target_proteins_folder = join(data_path, target_proteins_folder)
 		self.blast_folder = join(data_path, blast_folder)
 		self.out_path = out_path
 
@@ -65,12 +70,12 @@ class HomologyBasedEpitopes:
 		protein_info_parts = protein_info.split(",")
 		protein_id = protein_info_parts[0].split("_")[0]
 		protein_start_end = protein_info_parts[1].split("=")[1].split("-")
-		protein_start,protein_end = protein_start_end[0],protein_start_end[1]
+		protein_start, protein_end = protein_start_end[0], protein_start_end[1]
 		protein_max_RF = protein_info_parts[2].split("=")[1]
 
-		return protein_id,protein_start,protein_end,protein_max_RF
+		return protein_id, protein_start, protein_end, protein_max_RF
 
-	def blast_out2csv(self,blast_out_file):
+	def blast_out2csv(self, blast_out_file):
 		"""
 		Convert a blast alignment (output format = 7, commented tabular) to csv file
 
@@ -88,19 +93,44 @@ class HomologyBasedEpitopes:
 		if not exists(join(self.out_path, epitopes_name)):
 			print("Create file: {}".format(epitopes_name))
 			with open(join(self.out_path, epitopes_name), "w") as epitopes_out:
-				epitopes_out.write("relative_organism,relative_prot_id,relative_epi_start,relative_epi_end,relative_epi_sequence,relative_max_RF,target_organism,target_prot_id,target_epi_start,target_epi_end,target_epi_sequence,blast_identity,prediction_method\n")
+				epitopes_out.write(
+					"relative_organism,relative_prot_id,relative_epi_start,relative_epi_end,relative_epi_sequence,relative_max_RF,target_organism,target_prot_id,target_epi_start,target_epi_end,target_epi_sequence,blast_identity,prediction_method\n")
 
-		with open(join(self.out_path,epitopes_name),"a") as epitopes_out:
+		with open(join(self.out_path, epitopes_name), "a") as epitopes_out:
 			print("Update file: {}".format(epitopes_name))
-			blast_alignments_df = read_csv(join(self.blast_folder,blast_out_file),sep="\t",header=0)
+			blast_alignments_df = read_csv(join(self.blast_folder, blast_out_file), sep="\t", header=0)
+			target_prot_is_loaded, relative_prot_is_loaded = False, False
+
 			for index, blast_alignment in blast_alignments_df.iterrows():
-				relative_prot_id,relative_epi_start,relative_epi_end,relative_max_RF = HomologyBasedEpitopes.process_relative_protein_info(blast_alignment["qseqid"])
+				relative_prot_id, relative_epi_start, relative_epi_end, relative_max_RF = HomologyBasedEpitopes.process_relative_protein_info(
+					blast_alignment["qseqid"])
 				target_prot_id = blast_alignment["sseqid"].split("|")[3]
 				target_start, target_end = str(blast_alignment["sstart"]), str(blast_alignment["send"])
 				blast_identity = str(blast_alignment["pident"])
+
+				# read target organism protein record
+				if not target_prot_is_loaded:
+					target_prot_rec = SeqIO.read(join(self.target_proteins_folder, target_prot_id + ".fasta"),"fasta")
+					target_prot_is_loaded = True
+				assert int(target_start) >= 1, "AssertionError: BLAST should report 1-index alignments, current alignment start = {}".format(
+					target_start)
+				target_epi_seq = str(target_prot_rec.seq[int(target_start) - 1:int(target_end)])
+
+				# read close relative organism protein record
+				if not relative_prot_is_loaded:
+					relative_epi_seqs ={}
+					for rel_epi in SeqIO.parse(join(self.out_path,"immunodom_regions_"+relative_prot_id+".fasta"),"fasta"):
+						relative_epi_seqs[rel_epi.id] = str(rel_epi.seq)
+					relative_prot_is_loaded = True
+				assert blast_alignment["qseqid"] in relative_epi_seqs, "AssertionError: Close relative virus protein should contain epitope with id: {}".format(blast_alignment["qseqid"])
+				relative_epi_seq = relative_epi_seqs[blast_alignment["qseqid"]]
+
 				print("Write homology based epitope")
-				epitope_row = ",".join([self.ncbi_ids["relative_organism"],relative_prot_id,relative_epi_start,relative_epi_end,"unknown_seq",relative_max_RF,self.ncbi_ids["target_organism"],target_prot_id,target_start,target_end,"unknown_seq",blast_identity,"homology"])
-				epitopes_out.write(epitope_row+"\n")
+				epitope_row = ",".join(
+					[self.ncbi_ids["relative_organism"], relative_prot_id, relative_epi_start, relative_epi_end,
+					 relative_epi_seq, relative_max_RF, self.ncbi_ids["target_organism"], target_prot_id, target_start,
+					 target_end, target_epi_seq, blast_identity, "homology"])
+				epitopes_out.write(epitope_row + "\n")
 
 	def find_epitopes(self):
 		"""

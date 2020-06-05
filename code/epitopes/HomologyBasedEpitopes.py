@@ -2,7 +2,7 @@ from os.path import join, exists
 from os import scandir
 from code.utils import is_fasta_file_extension
 from Bio import SearchIO
-
+from pandas import read_csv
 
 class HomologyBasedEpitopes:
 	"""
@@ -58,14 +58,15 @@ class HomologyBasedEpitopes:
 		if not exists(join(self.out_path, epitopes_name)):
 			print("Create file: {}".format(epitopes_name))
 			with open(join(self.out_path, epitopes_name), "w") as epitopes_out:
-				epitopes_out.write("sars_cov_seq,sars_cov_max_RF,sars_cov2_seq,sars_cov2_protein_id, sars_cov2_alignment_pos,identity\n")
+				epitopes_out.write("relative_organism,relative_prot_id,relative_epi_region,relative_epi_sequence,relative_max_RF,target_organism,target_prot_id,target_epi_regio,target_epi_sequence,blast_identity\n")
 		with open(join(self.out_path,epitopes_name),"a") as epitopes_out:
 			print("Update file: {}".format(epitopes_name))
-			blast_alignments = SearchIO.parse(join(self.blast_folder,blast_out_file), 'blast-tab', comments=True)
+			blast_alignments = read_csv(join(self.blast_folder,blast_out_file),sep="\t",header=0)
 			for blast_alignment in blast_alignments:
 				for hsp in blast_alignment.hsps:
 					print(hsp)
 					print("---")
+
 	def find_epitopes(self):
 		"""
 		Find homology based epitopes

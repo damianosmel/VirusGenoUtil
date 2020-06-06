@@ -257,10 +257,13 @@ class Immunodominance:
 		# save protein fragment for each immunodominant region
 		immunodom_frags = []
 		for i, region in enumerate(immunodominant_regions):
-			reg_start, reg_end = region[0], region[-1] + 1
+			# reg_start, reg_end = region[0], region[-1] + 1
+			reg_start, reg_end = region[0]+1, region[-1]+1
 			if reg_end - reg_start >= 10:
-				immunodom_frag = protein_record.seq[reg_start:reg_end + 1]
+				# immunodom_frag = protein_record.seq[reg_start:reg_end + 1]
+				immunodom_frag = protein_record.seq[reg_start-1:reg_end]
 				max_lower_bound = float("{:.4f}".format(max(protein_record.letter_annotations["sliding_avg_lower_bound"][reg_start:reg_end + 1])))
+				max_lower_bound = float("{:.4f}".format(max(protein_record.letter_annotations["sliding_avg_lower_bound"][reg_start-1:reg_end])))
 				frag_record = SeqRecord(immunodom_frag, id=protein_id + "_immunodom_frag_"+str(i + 1)+",reg="+str(reg_start)+"-"+str(reg_end)+",max_lower_bound="+str(max_lower_bound), name="", description="")
 				immunodom_frags.append(frag_record)
 			else:

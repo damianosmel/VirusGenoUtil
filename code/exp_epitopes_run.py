@@ -38,7 +38,7 @@ processed_proteins = Immunodominance_Bcells.process_all_proteins(window_size, sa
 # subject_proteins_folder = "sars_cov2_proteins"
 # blast_folder = "blast"
 # ncbi_ids = {"relative_organism": "NC_004718.3", "target_organism": "NC_045512.2"}
-
+#
 # HomologyBasedEpitopes_Bcells = HomologyBasedEpitopes(ncbi_ids, data_path, subject_proteins_folder, blast_folder, out_path)
 # HomologyBasedEpitopes_Bcells.find_epitopes()
 

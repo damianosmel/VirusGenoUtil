@@ -94,7 +94,7 @@ class HomologyBasedEpitopes:
 			print("Create file: {}".format(epitopes_name))
 			with open(join(self.out_path, epitopes_name), "w") as epitopes_out:
 				epitopes_out.write(
-					"relative_organism,relative_prot_id,relative_epi_start,relative_epi_end,relative_epi_sequence,relative_max_RF,target_organism,target_prot_id,target_epi_start,target_epi_end,target_epi_sequence,blast_identity,prediction_method\n")
+					"target_organism,target_prot_id,target_epi_start,target_epi_end,target_epi_sequence,relative_organism,relative_prot_id,relative_epi_start,relative_epi_end,relative_epi_sequence,relative_max_RF,blast_identity,prediction_method\n")
 
 		with open(join(self.out_path, epitopes_name), "a") as epitopes_out:
 			print("Update file: {}".format(epitopes_name))
@@ -127,9 +127,9 @@ class HomologyBasedEpitopes:
 
 				print("Write homology based epitope")
 				epitope_row = ",".join(
-					[self.ncbi_ids["relative_organism"], relative_prot_id, relative_epi_start, relative_epi_end,
-					 relative_epi_seq, relative_max_RF, self.ncbi_ids["target_organism"], target_prot_id, target_start,
-					 target_end, target_epi_seq, blast_identity, "homology"])
+					[self.ncbi_ids["target_organism"], target_prot_id, target_start, target_end, target_epi_seq,
+					 self.ncbi_ids["relative_organism"], relative_prot_id, relative_epi_start, relative_epi_end,
+					 relative_epi_seq, relative_max_RF, blast_identity, "homology"])
 				epitopes_out.write(epitope_row + "\n")
 
 	def find_epitopes(self):

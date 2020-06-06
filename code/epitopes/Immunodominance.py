@@ -23,7 +23,7 @@ class Immunodominance:
 	output: sliding average of lower bound of 95% confidence interval (CI) of response frequency (RF)
 	"""
 
-	def __init__(self, data_path, proteins_folder, exp_epitopes_folder, out_path):
+	def __init__(self, data_path, proteins_folder, exp_epitopes_folder, assay_species, out_path):
 		"""
 		Immunodominance constructor
 
@@ -35,6 +35,8 @@ class Immunodominance:
 			proteins folder
 		exp_epitopes_folder : str
 			experimental epitopes folder
+		assay_species : str
+			name of species on which epitopes response frequency was measured
 		out_path : str
 			output data root
 
@@ -45,6 +47,7 @@ class Immunodominance:
 		self.data_path = data_path
 		self.proteins_path = join(data_path, proteins_folder)
 		self.exp_epitopes_path = join(data_path, exp_epitopes_folder)
+		self.assay_species = assay_species
 		self.out_path = out_path
 		self.proteins = {}
 
@@ -85,7 +88,7 @@ class Immunodominance:
 			loaded immunome dataframe
 		"""
 		print("Load immunome csv")
-		immunome_name = "RF_" + protein_id + ".csv"
+		immunome_name = "RF_" + self.assay_species + "_" + protein_id + ".csv"
 		immunome_df = read_csv(join(self.exp_epitopes_path, immunome_name), sep=",", header=0)
 		return immunome_df
 

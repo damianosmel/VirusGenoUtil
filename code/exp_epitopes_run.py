@@ -62,7 +62,7 @@ create_dir(out_path)
 
 print("==== ====")
 Immunodominance_Tcells = Immunodominance(data_path, query_proteins_folder, exp_epitopes_folder, assay_species, out_path)
-processed_proteins = Immunodominance_Bcells.process_all_proteins(window_size, save_plot, sliding_avg_cutoff,
+processed_proteins = Immunodominance_Tcells.process_all_proteins(window_size, save_plot, sliding_avg_cutoff,
                                                                  save_immunodominant_reg)
 
 print("=== * ===")

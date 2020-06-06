@@ -107,8 +107,6 @@ class Immunodominance:
 		-------
 		None
 		"""
-		print("Sum lower bound RF per epitope and amino-acid position")
-
 		epitope_position = int(immunome["position"]) - 1  # 0-index
 		epitope_lower_bound = float(immunome["lowerbound"])
 		self.proteins[protein_id].letter_annotations["lower_bound_rf"][epitope_position] += epitope_lower_bound
@@ -210,6 +208,7 @@ class Immunodominance:
 			# read immuno csv
 			immunome_df = self.load_immunome_csv(protein_id)
 			# sum lower bound RF per position
+			print("Sum lower bound RF per epitope and amino-acid position")
 			immunome_df.apply(self.sum_per_position, protein_id=protein_id, axis=1)
 			self.proteins[protein_id].letter_annotations["sliding_avg_lower_bound"] = self.compute_sliding_avg(
 				protein_id,
@@ -257,14 +256,11 @@ class Immunodominance:
 		# save protein fragment for each immunodominant region
 		immunodom_frags = []
 		for i, region in enumerate(immunodominant_regions):
-			# reg_start, reg_end = region[0], region[-1] + 1
-			reg_start, reg_end = region[0]+1, region[-1]+1
-			if reg_end - reg_start >= 10:
-				# immunodom_frag = protein_record.seq[reg_start:reg_end + 1]
-				immunodom_frag = protein_record.seq[reg_start-1:reg_end]
-				max_lower_bound = float("{:.4f}".format(max(protein_record.letter_annotations["sliding_avg_lower_bound"][reg_start:reg_end + 1])))
-				max_lower_bound = float("{:.4f}".format(max(protein_record.letter_annotations["sliding_avg_lower_bound"][reg_start-1:reg_end])))
-				frag_record = SeqRecord(immunodom_frag, id=protein_id + "_immunodom_frag_"+str(i + 1)+",reg="+str(reg_start)+"-"+str(reg_end)+",max_lower_bound="+str(max_lower_bound), name="", description="")
+			reg_start, reg_end = region[0], region[-1]+1
+			if reg_end - reg_start + 1 >= 10:
+				immunodom_frag = protein_record.seq[reg_start:reg_end]
+				max_lower_bound = float("{:.4f}".format(max(protein_record.letter_annotations["sliding_avg_lower_bound"][reg_start:reg_end])))
+				frag_record = SeqRecord(immunodom_frag, id=protein_id + "_immunodom_frag_"+str(i + 1)+",reg="+str(reg_start+1)+"-"+str(reg_end)+",max_lower_bound="+str(max_lower_bound), name="", description="")
 				immunodom_frags.append(frag_record)
 			else:
 				print("Skip region with less than 10 amino-acids")

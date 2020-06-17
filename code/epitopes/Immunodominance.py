@@ -135,7 +135,8 @@ class Immunodominance:
 		"""
 		print("Compute sliding average RF")
 		lower_bound_rf = np.asarray(self.proteins[protein_id].letter_annotations["lower_bound_rf"])
-		sliding_average = Series(lower_bound_rf).rolling(window=int((window_size/2)-1), min_periods=1, center=True).mean()
+		sliding_average = Series(lower_bound_rf).rolling(window=int((window_size / 2) - 1), min_periods=1,
+		                                                 center=True).mean()
 		assert len(lower_bound_rf) == len(sliding_average), "Sliding average values are less the starting RF values"
 
 		if save_plot:
@@ -171,7 +172,8 @@ class Immunodominance:
 		protein_rec.letter_annotations["sliding_avg_lower_bound"] = len(protein_rec.seq) * [0.0]
 		return protein_rec
 
-	def process_all_proteins(self, window_size, save_plot, sliding_avg_cutoff, save_immunodominant_reg):
+	def process_all_proteins(self, window_size, save_plot, sliding_avg_cutoff, split_at_min_RF,
+	                         save_immunodominant_reg):
 		"""
 		Process Immunodominance regions for each loaded protein
 
@@ -183,6 +185,8 @@ class Immunodominance:
 			create and save plot of sliding window values (True) otherwise don't save (False)
 		sliding_avg_cutoff : float
 			cutoff of sliding average of lower bound RF to find immunodominant regions
+		split_at_min_RF : bool
+			split a region into sub-regions if minimum RF is too lower than max RF (True) otherwise don't split (False)
 		save_immunodominant_reg : bool
 			save sequence of each immunodominant region (True) otherwise don't save (False)
 
@@ -206,10 +210,10 @@ class Immunodominance:
 				protein_id,
 				window_size,
 				save_plot)
-			self.find_immunodominant_regions(protein_id, sliding_avg_cutoff, save_immunodominant_reg)
+			self.find_immunodominant_regions(protein_id, sliding_avg_cutoff, split_at_min_RF, save_immunodominant_reg)
 		return self.proteins
 
-	def find_immunodominant_regions(self, protein_id, sliding_avg_cutoff, save_regions):
+	def find_immunodominant_regions(self, protein_id, sliding_avg_cutoff, split_at_min_RF, save_regions):
 		"""
 		Find immunodominant regions in input protein
 
@@ -219,6 +223,8 @@ class Immunodominance:
 			id of protein to compute average sliding window
 		sliding_avg_cutoff : float
 			cutoff of sliding average of lower bound RF to find immunodominant regions
+		split_at_min_RF : bool
+			split a region into sub-regions if minimum RF exists
 		save_regions : bool
 			save identified regions in fasta file (True), otherwise don't save (False)
 
@@ -245,14 +251,38 @@ class Immunodominance:
 			previous_pos = aa_pos
 		immunodominant_regions.append(current_region)
 
+		# split immunodominant regions if a very minimum RF exists
+		if split_at_min_RF:
+			splitted_immunodominant_regions = []
+			for region in immunodominant_regions:
+				reg_start, reg_end = region[0], region[-1] + 1
+				max_RF = max(protein_record.letter_annotations["sliding_avg_lower_bound"][reg_start:reg_end])
+				min_RF = min(protein_record.letter_annotations["sliding_avg_lower_bound"][reg_start:reg_end])
+				min_RF_pos = reg_start + protein_record.letter_annotations["sliding_avg_lower_bound"][
+				                         reg_start:reg_end].index(min_RF)
+				if max_RF - min_RF >= sliding_avg_cutoff and min_RF_pos + 1 < reg_end:
+					# split if the min is much lower than max, but also min is NOT in the end of the region
+					print("Splitting immunodominant regions to shorter as minimum value too lower than maximum value")
+					min_RF_pos = reg_start + protein_record.letter_annotations["sliding_avg_lower_bound"][
+					                         reg_start:reg_end].index(min_RF)
+					sub_region1, sub_region2 = [reg_start, min_RF_pos], [min_RF_pos + 1, reg_end]
+					splitted_immunodominant_regions.append(sub_region1)
+					splitted_immunodominant_regions.append(sub_region2)
+				else:
+					splitted_immunodominant_regions.append(region)
+			immunodominant_regions = splitted_immunodominant_regions
+
 		# save protein fragment for each immunodominant region
 		immunodom_frags = []
 		for i, region in enumerate(immunodominant_regions):
-			reg_start, reg_end = region[0], region[-1]+1
+			reg_start, reg_end = region[0], region[-1] + 1
 			if reg_end - reg_start + 1 >= 10:
 				immunodom_frag = protein_record.seq[reg_start:reg_end]
-				max_lower_bound = float("{:.4f}".format(max(protein_record.letter_annotations["sliding_avg_lower_bound"][reg_start:reg_end])))
-				frag_record = SeqRecord(immunodom_frag, id=protein_id + "_immunodom_frag_"+str(i + 1)+",reg="+str(reg_start+1)+"-"+str(reg_end)+",max_lower_bound="+str(max_lower_bound), name="", description="")
+				max_lower_bound = float("{:.4f}".format(
+					max(protein_record.letter_annotations["sliding_avg_lower_bound"][reg_start:reg_end])))
+				frag_record = SeqRecord(immunodom_frag, id=protein_id + "_immunodom_frag_" + str(i + 1) + ",reg=" + str(
+					reg_start + 1) + "-" + str(reg_end) + ",max_lower_bound=" + str(max_lower_bound), name="",
+				                        description="")
 				immunodom_frags.append(frag_record)
 			else:
 				print("Skip region with less than 10 amino-acids")

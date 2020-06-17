@@ -13,7 +13,6 @@ from code.utils import create_dir
 ###                                          ###
 ### B cells epitopes sars-cov1 --> sars-cov2 ###
 ###                                          ###
-"""
 # input
 data_path = "/home/damian/Documents/L3S/projects/sars_cov2/data/exp_epitopes_input"
 query_proteins_folder = "sars_cov1_proteins"
@@ -32,7 +31,7 @@ print("==== ====")
 Immunodominance_Bcells = Immunodominance(data_path, query_proteins_folder, exp_epitopes_folder, assay_species, out_path)
 processed_proteins = Immunodominance_Bcells.process_all_proteins(window_size, save_plot, sliding_avg_cutoff,
                                                                  save_immunodominant_reg)
-
+"""
 print("==== ====")
 # input
 subject_proteins_folder = "sars_cov2_proteins"
@@ -43,6 +42,7 @@ HomologyBasedEpitopes_Bcells = HomologyBasedEpitopes(ncbi_ids, data_path, subjec
 HomologyBasedEpitopes_Bcells.find_epitopes()
 """
 
+"""
 ###                                          ###
 ### T cells epitopes sars-cov1 --> sars-cov2 ###
 ###                                          ###
@@ -73,6 +73,7 @@ ncbi_ids = {"relative_organism": "NC_004718.3", "target_organism": "NC_045512.2"
 
 HomologyBasedEpitopes_Tcells = HomologyBasedEpitopes(ncbi_ids, data_path, subject_proteins_folder, blast_folder, out_path)
 HomologyBasedEpitopes_Tcells.find_epitopes()
+"""
 
 print("=== * ===")
 print("== *** ==")

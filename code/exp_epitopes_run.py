@@ -15,9 +15,9 @@ from code.utils import create_dir
 ###                                          ###
 # input
 data_path = "/home/damian/Documents/L3S/projects/sars_cov2/data/exp_epitopes_input"
-query_proteins_folder = "sars_cov1_proteins"
+query_proteins_folder = "sars_cov1_proteins" # please name _Bcells
 exp_epitopes_folder = "Bcells"
-assay_species = "human_mice"
+assay_species = "human"
 exp_epitopes_folder = exp_epitopes_folder
 window_size = 10
 save_plot = True

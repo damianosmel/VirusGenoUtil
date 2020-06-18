@@ -110,19 +110,23 @@ class HomologyBasedEpitopes:
 
 				# read target organism protein record
 				if not target_prot_is_loaded:
-					target_prot_rec = SeqIO.read(join(self.target_proteins_folder, target_prot_id + ".fasta"),"fasta")
+					target_prot_rec = SeqIO.read(join(self.target_proteins_folder, target_prot_id + ".fasta"), "fasta")
 					target_prot_is_loaded = True
-				assert int(target_start) >= 1, "AssertionError: BLAST should report 1-index alignments, current alignment start = {}".format(
+				assert int(
+					target_start) >= 1, "AssertionError: BLAST should report 1-index alignments, current alignment start = {}".format(
 					target_start)
 				target_epi_seq = str(target_prot_rec.seq[int(target_start) - 1:int(target_end)])
 
 				# read close relative organism protein record
 				if not relative_prot_is_loaded:
-					relative_epi_seqs ={}
-					for rel_epi in SeqIO.parse(join(self.out_path,"immunodom_regions_"+relative_prot_id+".fasta"),"fasta"):
+					relative_epi_seqs = {}
+					for rel_epi in SeqIO.parse(join(self.out_path, "immunodom_regions_" + relative_prot_id + ".fasta"),
+					                           "fasta"):
 						relative_epi_seqs[rel_epi.id] = str(rel_epi.seq)
 					relative_prot_is_loaded = True
-				assert blast_alignment["qseqid"] in relative_epi_seqs, "AssertionError: Close relative virus protein should contain epitope with id: {}".format(blast_alignment["qseqid"])
+				assert blast_alignment[
+					       "qseqid"] in relative_epi_seqs, "AssertionError: Close relative virus protein should contain epitope with id: {}".format(
+					blast_alignment["qseqid"])
 				relative_epi_seq = relative_epi_seqs[blast_alignment["qseqid"]]
 
 				print("Write homology based epitope")

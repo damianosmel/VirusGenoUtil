@@ -286,7 +286,7 @@ class Immunodominance:
 				immunodom_frags.append(frag_record)
 			else:
 				print("Skip region with less than 10 amino-acids")
-				print("Skipped region start={} & end={}".format(reg_start,reg_end))
+				print("Skipped region start={} & end={}".format(reg_start, reg_end))
 		if save_regions:
 			SeqIO.write(immunodom_frags, join(self.out_path, "immunodom_regions_" + protein_id + ".fasta"), "fasta")
 			print("Saved regions at: {}".format(join(self.out_path, "immunodom_regions_" + protein_id + ".fasta")))

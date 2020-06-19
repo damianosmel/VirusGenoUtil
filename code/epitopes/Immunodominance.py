@@ -7,7 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
-from math import isnan
+
 
 
 class Immunodominance:
@@ -251,9 +251,9 @@ class Immunodominance:
 
 		return uniq_epitopes2allele
 
-	def find_epitopes_position(self, protein_rec, epitopes):
+	def find_epitope_regions(self, protein_rec, epitopes):
 		"""
-		Find the epitopes position in the protein record
+		Find the epitopes regions (start-stop) in the protein record
 		Credits: Chapter 20.1.8 Biopython (http://biopython.org/DIST/docs/tutorial/Tutorial.html)
 		Parameters
 		----------
@@ -264,10 +264,11 @@ class Immunodominance:
 
 		Returns
 		-------
-			dict of str: list of int
-			dictionary to map epitope sequence to start end position
+			list of list of int
+			sorted list of start end position of epitopes regions
 		"""
 		print("Map unique epitope sequence to start end positions")
+		"""
 		epitope2position = {}
 		for epi in epitopes:
 			start = protein_rec.seq.find(epi)
@@ -276,7 +277,15 @@ class Immunodominance:
 				epitope2position[epi] = [start, end]
 			else:
 				print("Epitope: {} could not be found in protein id={}".format(epi, protein_rec.id))
-		return epitope2position
+		"""
+		epi_regions = []
+		for epi in epitopes:
+			start = protein_rec.seq.find(epi)
+			if start != -1:
+				end = start + len(epi) - 1
+				epi_regions.append([start,end])
+		epi_regions.sort(key=lambda x: x[0])  # sort ascending by starting position
+		return epi_regions
 
 	def retrieve_Tcells_epitopes(self, protein_id, save_epitopes):
 		"""
@@ -288,19 +297,41 @@ class Immunodominance:
 			if of protein
 		save_epitopes : bool
 			save retrieved epitopes in fasta (True) otherwise don't save
+
 		Returns
 		-------
-
+		None
 		"""
 		print("Retrieve and save T-cells epitopes")
+
 		# load assay csv
 		tcell_assay = read_csv(join(self.exp_epitopes_path, "tcell_" + protein_id + ".csv"), sep=",", header=1)
 		epitope2allele = self.map_epitope2allele(tcell_assay)
 		print(epitope2allele)
+
 		# save unique epitopes into fasta file
 		protein_record = self.proteins[protein_id]
-		epitope2position = self.find_epitopes_position(protein_record, list(epitope2allele.keys()))
-		print(epitope2position)
+		epi_regions = self.find_epitope_regions(protein_record, list(epitope2allele.keys()))
+		print(epi_regions)
+
+		# collect all info per epitope region and save region
+		epi_frags = []
+		for i, region in enumerate(epi_regions):
+			reg_start, reg_end = region[0], region[-1] + 1
+			#if reg_end - reg_start + 1 >= 10:
+			epi_frag = protein_record.seq[reg_start:reg_end]
+			max_lower_bound = float("{:.4f}".format(max(protein_record.letter_annotations["sliding_avg_lower_bound"][reg_start:reg_end])))
+			frag_record = SeqRecord(epi_frag, id=protein_id + "_immunodom_frag_" + str(i + 1) + ",reg=" + str(reg_start + 1) + "-" + str(reg_end) + ",max_lower_bound=" + str(max_lower_bound)
+			                        +",HLA=" + epitope2allele[protein_record.seq[reg_start:reg_end]],
+			                        name="",
+				                    description="")
+			epi_frags.append(frag_record)
+			#else:
+			#	print("Skip region with less than 10 amino-acids")
+			#	print("Skipped region start={} & end={}".format(reg_start, reg_end))
+		if save_epitopes:
+			SeqIO.write(epi_frags, join(self.out_path, "immunodom_regions_" + protein_id + ".fasta"), "fasta")
+			print("Saved regions at: {}".format(join(self.out_path, "immunodom_regions_" + protein_id + ".fasta")))
 
 	def find_immunodominant_regions(self, protein_id, sliding_avg_cutoff, split_at_min_RF, save_regions):
 		"""
@@ -349,7 +380,7 @@ class Immunodominance:
 				min_RF = min(protein_record.letter_annotations["sliding_avg_lower_bound"][reg_start:reg_end])
 				min_RF_pos = reg_start + protein_record.letter_annotations["sliding_avg_lower_bound"][
 				                         reg_start:reg_end].index(min_RF)
-				if max_RF - min_RF >= sliding_avg_cutoff and min_RF_pos + 1 < reg_end:
+				if split_at_min_RF and max_RF - min_RF >= sliding_avg_cutoff and min_RF_pos + 1 < reg_end:
 					# split if the min is much lower than max, but also min is NOT in the end of the region
 					print("Splitting immunodominant regions to shorter as minimum value too lower than maximum value")
 					min_RF_pos = reg_start + protein_record.letter_annotations["sliding_avg_lower_bound"][

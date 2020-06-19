@@ -307,18 +307,15 @@ class Immunodominance:
 		# load assay csv
 		tcell_assay = read_csv(join(self.exp_epitopes_path, "tcell_" + protein_id + ".csv"), sep=",", header=1)
 		epitope2allele = self.map_epitope2allele(tcell_assay)
-		print(epitope2allele)
 
 		# save unique epitopes into fasta file
 		protein_record = self.proteins[protein_id]
 		epi_regions = self.find_epitope_regions(protein_record, list(epitope2allele.keys()))
-		print(epi_regions)
 
 		# collect all info per epitope region and save region
 		epi_frags = []
 		for i, region in enumerate(epi_regions):
 			reg_start, reg_end = region[0], region[-1] + 1
-			#if reg_end - reg_start + 1 >= 10:
 			epi_frag = protein_record.seq[reg_start:reg_end]
 			max_lower_bound = float("{:.4f}".format(max(protein_record.letter_annotations["sliding_avg_lower_bound"][reg_start:reg_end])))
 			frag_record = SeqRecord(epi_frag, id=protein_id + "_immunodom_frag_" + str(i + 1) + ",reg=" + str(reg_start + 1) + "-" + str(reg_end) + ",max_lower_bound=" + str(max_lower_bound)
@@ -326,9 +323,7 @@ class Immunodominance:
 			                        name="",
 				                    description="")
 			epi_frags.append(frag_record)
-			#else:
-			#	print("Skip region with less than 10 amino-acids")
-			#	print("Skipped region start={} & end={}".format(reg_start, reg_end))
+
 		if save_epitopes:
 			SeqIO.write(epi_frags, join(self.out_path, "immunodom_regions_" + protein_id + ".fasta"), "fasta")
 			print("Saved regions at: {}".format(join(self.out_path, "immunodom_regions_" + protein_id + ".fasta")))

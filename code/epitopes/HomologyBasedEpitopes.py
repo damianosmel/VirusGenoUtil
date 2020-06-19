@@ -47,7 +47,7 @@ class HomologyBasedEpitopes:
 		self.out_path = out_path
 
 	@staticmethod
-	def process_relative_protein_info(protein_info):
+	def process_relative_protein_info(protein_info, process_tcells):
 		"""
 		Process close relative virus protein info tag to get
 		protein id, start end of immunodominant region, max RF (response frequency)
@@ -66,16 +66,21 @@ class HomologyBasedEpitopes:
 			end of immunodominant region
 		protein_max_RF : str
 			immunodominant region maximum RF
+		process_tcells : bool
+			process T-cells (True), otherwise process B-cells
 		"""
 		protein_info_parts = protein_info.split(",")
 		protein_id = protein_info_parts[0].split("_")[0]
 		protein_start_end = protein_info_parts[1].split("=")[1].split("-")
 		protein_start, protein_end = protein_start_end[0], protein_start_end[1]
 		protein_max_RF = protein_info_parts[2].split("=")[1]
+		if process_tcells:
+			hla_allele = protein_info_parts[3].split("=")[1]
+		else:
+			hla_allele = "not applicable"
+		return protein_id, protein_start, protein_end, protein_max_RF, hla_allele
 
-		return protein_id, protein_start, protein_end, protein_max_RF
-
-	def blast_out2csv(self, blast_out_file):
+	def blast_out2csv(self, blast_out_file, process_tcells):
 		"""
 		Convert a blast alignment (output format = 7, commented tabular) to csv file
 
@@ -83,6 +88,8 @@ class HomologyBasedEpitopes:
 		----------
 		blast_out_file : str
 			blast output filename
+		process_tcells : bool
+			process T-cells (True), otherwise process B-cells (False)
 
 		Returns
 		-------
@@ -94,7 +101,7 @@ class HomologyBasedEpitopes:
 			print("Create file: {}".format(epitopes_name))
 			with open(join(self.out_path, epitopes_name), "w") as epitopes_out:
 				epitopes_out.write(
-					"target_organism,target_prot_id,target_epi_start,target_epi_end,target_epi_sequence,relative_organism,relative_prot_id,relative_epi_start,relative_epi_end,relative_epi_sequence,relative_max_RF,blast_identity,prediction_method\n")
+					"target_organism,target_prot_id,target_epi_start,target_epi_end,target_epi_sequence,relative_organism,relative_prot_id,relative_epi_start,relative_epi_end,relative_epi_sequence,relative_max_RF,HLA restriction,blast_identity,prediction_method\n")
 
 		with open(join(self.out_path, epitopes_name), "a") as epitopes_out:
 			print("Update file: {}".format(epitopes_name))
@@ -102,8 +109,8 @@ class HomologyBasedEpitopes:
 			target_prot_is_loaded, relative_prot_is_loaded = False, False
 
 			for index, blast_alignment in blast_alignments_df.iterrows():
-				relative_prot_id, relative_epi_start, relative_epi_end, relative_max_RF = HomologyBasedEpitopes.process_relative_protein_info(
-					blast_alignment["qseqid"])
+				relative_prot_id, relative_epi_start, relative_epi_end, relative_max_RF, hla_allele = HomologyBasedEpitopes.process_relative_protein_info(
+					blast_alignment["qseqid"], process_tcells)
 				target_prot_id = blast_alignment["sseqid"].split("|")[3]
 				target_start, target_end = str(blast_alignment["sstart"]), str(blast_alignment["send"])
 				blast_identity = str(blast_alignment["pident"])
@@ -133,15 +140,17 @@ class HomologyBasedEpitopes:
 				epitope_row = ",".join(
 					[self.ncbi_ids["target_organism"], target_prot_id, target_start, target_end, target_epi_seq,
 					 self.ncbi_ids["relative_organism"], relative_prot_id, relative_epi_start, relative_epi_end,
-					 relative_epi_seq, relative_max_RF, blast_identity, "homology"])
+					 relative_epi_seq, relative_max_RF, hla_allele, blast_identity, "homology"])
 				epitopes_out.write(epitope_row + "\n")
 
-	def find_epitopes(self):
+	def find_epitopes(self, process_tcells):
 		"""
 		Find homology based epitopes
 
 		Parameters
 		----------
+		process_tcells : bool
+			process T-cells (True), otherwise process B-cells (False)
 
 		Returns
 		-------
@@ -151,4 +160,4 @@ class HomologyBasedEpitopes:
 			for blast_content in blast_dir:
 				if blast_content.name[-3:] == "tsv" and blast_content.is_file():
 					print("Process blast output file: {}".format(blast_content.name))
-					self.blast_out2csv(blast_content.name)
+					self.blast_out2csv(blast_content.name, process_tcells)

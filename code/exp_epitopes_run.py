@@ -13,7 +13,7 @@ from code.utils import create_dir
 ###                                          ###
 ### B cells epitopes sars-cov1 --> sars-cov2 ###
 ###                                          ###
-
+"""
 # input
 data_path = "/home/damian/Documents/L3S/projects/sars_cov2/data/exp_epitopes_input"
 query_proteins_folder = "sars_cov1_proteins_Bcells"
@@ -29,6 +29,7 @@ process_tcells = False
 # output
 out_path = "/home/damian/Documents/L3S/projects/sars_cov2/exp_epitopes/Bcells"
 create_dir(out_path)
+"""
 
 """
 print("==== ====")
@@ -71,7 +72,9 @@ create_dir(out_path)
 
 print("==== ====")
 Immunodominance_Tcells = Immunodominance(data_path, query_proteins_folder, exp_epitopes_folder, assay_species, out_path)
-processed_proteins = Immunodominance_Tcells.process_all_proteins(process_tcells, window_size, save_plot, sliding_avg_cutoff, split_at_min_RF, save_immunodominant_reg)
+processed_proteins = Immunodominance_Tcells.process_all_proteins(process_tcells, window_size, save_plot,
+                                                                 sliding_avg_cutoff, split_at_min_RF,
+                                                                 save_immunodominant_reg)
 
 """
 print("==== ====")

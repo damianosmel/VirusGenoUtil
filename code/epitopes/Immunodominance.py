@@ -299,7 +299,6 @@ class Immunodominance:
 			else:
 				rf_score = (r - sqrt(r)) / t
 			rf_scores[epi] = rf_score
-		print(rf_scores)
 		return rf_scores
 
 	def find_epitope_regions(self, protein_rec, epitopes):

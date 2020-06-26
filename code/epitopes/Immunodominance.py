@@ -7,7 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
-
+from math import isnan, sqrt
 
 
 class Immunodominance:
@@ -176,7 +176,10 @@ class Immunodominance:
 	def process_all_proteins(self, process_tcells, window_size, save_plot, sliding_avg_cutoff, split_at_min_RF,
 	                         save_immunodominant_reg):
 		"""
-		Process Immunodominance regions for each loaded protein
+		Process
+		* Immunodominance regions for each loaded protein (B-cells)
+		* IEBD assay csv (T-cells)
+		in order to identify immunodominant regions and save them in fasta file
 
 		Parameters
 		----------
@@ -203,19 +206,24 @@ class Immunodominance:
 		for protein_id, protein_rec in self.proteins.items():
 			print("--- ---")
 			print("Process protein: {}".format(protein_id))
-			self.proteins[protein_id] = self.set_RF_zero(protein_rec)
-			# read immuno csv
-			immunome_df = self.load_immunome_csv(protein_id)
-			# sum lower bound RF per position
-			print("Sum lower bound RF per epitope and amino-acid position")
-			immunome_df.apply(self.sum_per_position, protein_id=protein_id, axis=1)
-			self.proteins[protein_id].letter_annotations["sliding_avg_lower_bound"] = self.compute_sliding_avg(
-				protein_id,
-				window_size,
-				save_plot)
-			if process_tcells:  # retrieve epitopes from the IEDB csv files
+			if process_tcells:
+				# for T-cells, retrieve epitopes from the IEDB csv files
 				self.retrieve_Tcells_epitopes(protein_id, save_immunodominant_reg)
 			else:
+				# for B-cells, parse the immunobrowser lower bound RF value
+				# compute the sliding window
+				# and identify immunodominant regions using a cut-off value
+				self.proteins[protein_id] = self.set_RF_zero(protein_rec)
+				# read immuno csv
+				immunome_df = self.load_immunome_csv(protein_id)
+				# sum lower bound RF per position
+				print("Sum lower bound RF per epitope and amino-acid position")
+				immunome_df.apply(self.sum_per_position, protein_id=protein_id, axis=1)
+				self.proteins[protein_id].letter_annotations["sliding_avg_lower_bound"] = self.compute_sliding_avg(
+					protein_id,
+					window_size,
+					save_plot)
+
 				self.find_immunodominant_regions(protein_id, sliding_avg_cutoff, split_at_min_RF,
 				                                 save_immunodominant_reg)
 		return self.proteins
@@ -251,6 +259,49 @@ class Immunodominance:
 
 		return uniq_epitopes2allele
 
+	def calculate_RF_score(self, idbe_assay, uniq_epitopes):
+		"""
+		Calculate RF score for T cell assays, using:
+		RF = (r-sqrt(r))/t,
+		where r is the # positive responding assays
+		and t is the # of the total tested assays
+
+		Parameters
+		----------
+		idbe_assay : Pandas.DataFrame
+			dataframe created from csv of IDBE assay tab
+		uniq_epitopes : list of str
+			list of unique epitope for which the RF score will be calculated
+
+		Returns
+		-------
+		dict of str : float
+			dictionary with key the unique epitope and the value the RF score
+		"""
+		print("Map unique epitope sequence to RF score")
+		rf_scores = {}
+		for epi in uniq_epitopes:
+			# sum r and t for all assays testing the current epitopte
+
+			t, r = 0.0, 0.0
+			for _, row in idbe_assay.loc[idbe_assay["Description"] == epi, ["Number of Subjects Tested",
+			                                                                "Number of Subjects Responded"]].iterrows():
+				if isnan(row["Number of Subjects Tested"]):
+					t = t + 1.0
+				else:
+					t = t + row["Number of Subjects Tested"]
+				if isnan(row["Number of Subjects Responded"]):
+					r = r + 1.0
+				else:
+					r = r + row["Number of Subjects Responded"]
+			if t == 0:
+				rf_score = 0.0
+			else:
+				rf_score = (r - sqrt(r)) / t
+			rf_scores[epi] = rf_score
+		print(rf_scores)
+		return rf_scores
+
 	def find_epitope_regions(self, protein_rec, epitopes):
 		"""
 		Find the epitopes regions (start-stop) in the protein record
@@ -268,22 +319,12 @@ class Immunodominance:
 			sorted list of start end position of epitopes regions
 		"""
 		print("Map unique epitope sequence to start end positions")
-		"""
-		epitope2position = {}
-		for epi in epitopes:
-			start = protein_rec.seq.find(epi)
-			if start != -1:
-				end = start + len(epi) - 1
-				epitope2position[epi] = [start, end]
-			else:
-				print("Epitope: {} could not be found in protein id={}".format(epi, protein_rec.id))
-		"""
 		epi_regions = []
 		for epi in epitopes:
 			start = protein_rec.seq.find(epi)
 			if start != -1:
 				end = start + len(epi) - 1
-				epi_regions.append([start,end])
+				epi_regions.append([start, end])
 		epi_regions.sort(key=lambda x: x[0])  # sort ascending by starting position
 		return epi_regions
 
@@ -310,19 +351,29 @@ class Immunodominance:
 
 		# save unique epitopes into fasta file
 		protein_record = self.proteins[protein_id]
+
+		# find epitope regions
 		epi_regions = self.find_epitope_regions(protein_record, list(epitope2allele.keys()))
 
-		# collect all info per epitope region and save region
+		# calculate RF score
+		epi2rf_score = self.calculate_RF_score(tcell_assay, list(epitope2allele.keys()))
+
+		# for each epitope region with RF score > 0
+		# collect all info per region and save region
 		epi_frags = []
 		for i, region in enumerate(epi_regions):
 			reg_start, reg_end = region[0], region[-1] + 1
 			epi_frag = protein_record.seq[reg_start:reg_end]
-			max_lower_bound = float("{:.4f}".format(max(protein_record.letter_annotations["sliding_avg_lower_bound"][reg_start:reg_end])))
-			frag_record = SeqRecord(epi_frag, id=protein_id + "_immunodom_frag_" + str(i + 1) + ",reg=" + str(reg_start + 1) + "-" + str(reg_end) + ",max_lower_bound=" + str(max_lower_bound)
-			                        +",HLA=" + epitope2allele[protein_record.seq[reg_start:reg_end]],
-			                        name="",
-				                    description="")
-			epi_frags.append(frag_record)
+			assert epi_frag in epi2rf_score, "Epitope with sequence {} does not have calculated RF score".format(
+				epi_frag)
+			rf_score = float("{:.4f}".format(epi2rf_score[epi_frag]))
+			if rf_score > 0.0:
+				frag_record = SeqRecord(epi_frag, id=protein_id + "_immunodom_frag_" + str(i + 1) + ",reg=" + str(
+					reg_start + 1) + "-" + str(reg_end) + ",RF_score=" + str(rf_score)
+				                                     + ",HLA=" + epitope2allele[protein_record.seq[reg_start:reg_end]],
+				                        name="",
+				                        description="")
+				epi_frags.append(frag_record)
 
 		if save_epitopes:
 			SeqIO.write(epi_frags, join(self.out_path, "immunodom_regions_" + protein_id + ".fasta"), "fasta")

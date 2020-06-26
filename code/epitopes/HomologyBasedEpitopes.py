@@ -123,6 +123,8 @@ class HomologyBasedEpitopes:
 					target_start) >= 1, "AssertionError: BLAST should report 1-index alignments, current alignment start = {}".format(
 					target_start)
 				target_epi_seq = str(target_prot_rec.seq[int(target_start) - 1:int(target_end)])
+				assert target_epi_seq != "", "AssertionError: For relative protein id: {}, region: {}-{}, target epitope sequence should not be empty string".format(
+					relative_prot_id, relative_epi_start, relative_epi_end)
 
 				# read close relative organism protein record
 				if not relative_prot_is_loaded:

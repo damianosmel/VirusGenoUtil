@@ -69,7 +69,7 @@ class HomologyBasedEpitopes:
 		process_tcells : bool
 			process T-cells (True), otherwise process B-cells
 		"""
-		protein_info_parts = protein_info.split(",")
+		protein_info_parts = protein_info.split("|")
 		protein_id = protein_info_parts[0].split("_")[0]
 		protein_start_end = protein_info_parts[1].split("=")[1].split("-")
 		protein_start, protein_end = protein_start_end[0], protein_start_end[1]
@@ -96,12 +96,12 @@ class HomologyBasedEpitopes:
 		None
 		"""
 		print("Convert blast output file to homology based epitopes csv")
-		epitopes_name = "homology_based_epitopes.csv"
+		epitopes_name = "homology_based_epitopes.tsv"
 		if not exists(join(self.out_path, epitopes_name)):
 			print("Create file: {}".format(epitopes_name))
 			with open(join(self.out_path, epitopes_name), "w") as epitopes_out:
 				epitopes_out.write(
-					"target_organism,target_prot_id,target_epi_start,target_epi_end,target_epi_sequence,relative_organism,relative_prot_id,relative_epi_start,relative_epi_end,relative_epi_sequence,relative_RF_score,HLA restriction,blast_identity,prediction_method\n")
+					"target_organism\ttarget_prot_id\ttarget_epi_start\ttarget_epi_end\ttarget_epi_sequence\trelative_organism\trelative_prot_id\trelative_epi_start\trelative_epi_end\trelative_epi_sequence\trelative_RF_score\tHLA restriction\tblast_identity\tprediction_method\n")
 
 		with open(join(self.out_path, epitopes_name), "a") as epitopes_out:
 			print("Update file: {}".format(epitopes_name))
@@ -139,7 +139,7 @@ class HomologyBasedEpitopes:
 				relative_epi_seq = relative_epi_seqs[blast_alignment["qseqid"]]
 
 				print("Write homology based epitope")
-				epitope_row = ",".join(
+				epitope_row = "\t".join(
 					[self.ncbi_ids["target_organism"], target_prot_id, target_start, target_end, target_epi_seq,
 					 self.ncbi_ids["relative_organism"], relative_prot_id, relative_epi_start, relative_epi_end,
 					 relative_epi_seq, relative_RF_score, hla_allele, blast_identity, "homology"])

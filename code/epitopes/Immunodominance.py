@@ -255,8 +255,11 @@ class Immunodominance:
 					allele = str(row["Allele Name"])
 					if "HLA" not in allele:
 						allele = "unknown"
+					else:
+						allele = allele.replace(" ", "_")
 					if allele not in all_allele_names:
 						all_allele_names.append(allele)
+
 				if "unknown" in all_allele_names and len(all_allele_names) > 1:
 					all_allele_names.remove("unknown")
 				uniq_epitopes2allele[uniq_epi] = ",".join(all_allele_names)

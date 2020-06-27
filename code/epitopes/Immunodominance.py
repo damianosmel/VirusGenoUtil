@@ -250,12 +250,16 @@ class Immunodominance:
 
 		for uniq_epi in unique_epitopes:
 			if uniq_epi not in uniq_epitopes2allele:
-				allele = str(idbe_assay.loc[idbe_assay["Description"] == uniq_epi]["Allele Name"].iloc[0])
-				if "HLA" not in allele:
-					allele = "unknown"
-				else:
-					allele = str(allele)
-				uniq_epitopes2allele[uniq_epi] = allele
+				all_allele_names = []
+				for _, row in idbe_assay.loc[idbe_assay["Description"] == uniq_epi, ["Allele Name"]].iterrows():
+					allele = str(row["Allele Name"])
+					if "HLA" not in allele:
+						allele = "unknown"
+					if allele not in all_allele_names:
+						all_allele_names.append(allele)
+				if "unknown" in all_allele_names and len(all_allele_names) > 1:
+					all_allele_names.remove("unknown")
+				uniq_epitopes2allele[uniq_epi] = ",".join(all_allele_names)
 
 		return uniq_epitopes2allele
 
@@ -367,9 +371,9 @@ class Immunodominance:
 				epi_frag)
 			rf_score = float("{:.4f}".format(epi2rf_score[epi_frag]))
 			if rf_score > 0.0:
-				frag_record = SeqRecord(epi_frag, id=protein_id + "_immunodom_frag_" + str(i + 1) + ",reg=" + str(
-					reg_start + 1) + "-" + str(reg_end) + ",RF_score=" + str(rf_score)
-				                                     + ",HLA=" + epitope2allele[protein_record.seq[reg_start:reg_end]],
+				frag_record = SeqRecord(epi_frag, id=protein_id + "_immunodom_frag_" + str(i + 1) + "|reg=" + str(
+					reg_start + 1) + "-" + str(reg_end) + "|RF_score=" + str(rf_score)
+				                                     + "|HLA=" + epitope2allele[protein_record.seq[reg_start:reg_end]],
 				                        name="",
 				                        description="")
 				epi_frags.append(frag_record)
@@ -445,8 +449,8 @@ class Immunodominance:
 				immunodom_frag = protein_record.seq[reg_start:reg_end]
 				max_lower_bound = float("{:.4f}".format(
 					max(protein_record.letter_annotations["sliding_avg_lower_bound"][reg_start:reg_end])))
-				frag_record = SeqRecord(immunodom_frag, id=protein_id + "_immunodom_frag_" + str(i + 1) + ",reg=" + str(
-					reg_start + 1) + "-" + str(reg_end) + ",max_lower_bound=" + str(max_lower_bound), name="",
+				frag_record = SeqRecord(immunodom_frag, id=protein_id + "_immunodom_frag_" + str(i + 1) + "|reg=" + str(
+					reg_start + 1) + "-" + str(reg_end) + "|max_lower_bound=" + str(max_lower_bound), name="",
 				                        description="")
 				immunodom_frags.append(frag_record)
 			else:

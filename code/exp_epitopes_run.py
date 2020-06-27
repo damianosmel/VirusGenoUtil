@@ -55,7 +55,7 @@ HomologyBasedEpitopes_Bcells.find_epitopes(process_tcells)
 ###                                          ###
 ### T cells epitopes sars-cov1 --> sars-cov2 ###
 ###                                          ###
-"""
+
 # input
 data_path = "/home/damian/Documents/L3S/projects/sars_cov2/sars_cov2_data/exp_epitopes_input"
 query_proteins_folder = "sars_cov1_proteins_Tcells"
@@ -71,15 +71,16 @@ process_tcells = True
 # output
 out_path = "/home/damian/Documents/L3S/projects/sars_cov2/exp_epitopes/Tcells"
 create_dir(out_path)
-"""
 
-"""
+
+
 print("==== ====")
 Immunodominance_Tcells = Immunodominance(data_path, query_proteins_folder, exp_epitopes_folder, assay_species, out_path)
 processed_proteins = Immunodominance_Tcells.process_all_proteins(process_tcells, window_size, save_plot,
                                                                  sliding_avg_cutoff, split_at_min_RF,
                                                                  save_immunodominant_reg)
-"""
+
+
 """
 print("==== ====")
 # input

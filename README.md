@@ -61,4 +61,19 @@ This is a project to contribute utilities for a viral genomic data explorer.
 
 6. go to [exp_epitopes_run.py](code/exp_epitopes_run.py)
 * prepare and run the HomologyBasedEpitopes class
-* in the specified output folder, the homology based identified epitopes csv will be saved
+* in the specified output folder, the homology based identified epitopes tsv will be saved
+
+## Extract epitopes from prediction tools - How to use
+
+### Bepipred 2.0
+1. concatenate structural proteins into one fasta file (time-efficient way to use bepipred predictor):
+cd sars\_cov2\_data/pred\_epitopes\_input/sars\_cov2\_proteins
+cat *.fasta > sars_cov2_struct_prot.fasta
+
+2. run Bepipred 2.0 for the SARS-CoV-2 structural proteins:
+cd sars\_cov2/sars\_cov2\_data/pred\_epitopes\_input
+BepiPred-2.0 -t 0.55 sars\_cov2\_proteins/sars\_cov2\_struct\_prot.fasta > bepipred\_out/bepipred\_sars\_cov2.tsv
+
+3. set parameters on [pred_epitopes_run.py](code/pred_epitopes.py) and run section for BepipredEpitopes:
+ * the output tsv file will be placed on your specified output folder:
+ls -lh sars\_cov2/pred\_epitopes/bepipred/bepipred\_sars\_cov2\_epi.tsv

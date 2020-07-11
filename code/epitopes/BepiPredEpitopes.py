@@ -129,7 +129,11 @@ class BepiPredEpitopes:
 							current_epitope["end"] = bepipred_info["pos"]
 						else:  # running over epitope is finished
 							running_over_epi = False
-							self.write_epitope_row(current_epitope, epitopes_filename)
+							if len(current_epitope["seq"]) >= 9:
+								self.write_epitope_row(current_epitope, epitopes_filename)
+							else:
+								print("Exclude current epitope: {} from output tsv as its length is lower that 9 amino-acids".format(current_epitope["seq"]))
+							current_epitope = {"start": 0, "end": 0, "seq": None, "protein_id": None}
 					else:
 						if bepipred_info["epi"] == "E":  # the start of a new epitope is found
 							running_over_epi = True

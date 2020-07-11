@@ -76,4 +76,5 @@ BepiPred-2.0 -t 0.55 sars\_cov2\_proteins/sars\_cov2\_struct\_prot.fasta > bepip
 
 3. set parameters on [pred_epitopes_run.py](code/pred_epitopes.py) and run section for BepipredEpitopes:
  * the output tsv file will be placed on your specified output folder:
+
 ls -lh sars\_cov2/pred\_epitopes/bepipred/bepipred\_sars\_cov2\_epi.tsv

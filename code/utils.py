@@ -39,6 +39,8 @@ def is_fasta_file_extension(file_name):
 		return True
 	elif file_name[-6:] == ".fastq":
 		return True
+	elif file_name[-3:] == ".fa":
+		return True
 	else:
 		return False
 

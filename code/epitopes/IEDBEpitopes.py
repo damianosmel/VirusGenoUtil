@@ -4,6 +4,7 @@ from os.path import join, splitext, isfile
 from os import scandir
 from pandas import read_csv
 
+
 class IEDBEpitopes:
 	"""
 	Class to extract B and T-cells epitopes for
@@ -16,7 +17,8 @@ class IEDBEpitopes:
 	doi: 10.1093/nar/gky1006. PMID: 30357391
 	"""
 
-	def __init__(self, data_path, cell_epitopes_folder, viruses_folder, host_taxon_id, host_name, assay_type, output_path):
+	def __init__(self, data_path, cell_epitopes_folder, viruses_folder, host_taxon_id, host_name, assay_type,
+	             output_path):
 		"""
 
 		Parameters
@@ -45,7 +47,8 @@ class IEDBEpitopes:
 		self.viruses_path = join(data_path, viruses_folder)
 
 		self.tcell_iedb_assays, self.bcell_iedb_assays = None, None
-		self.host_taxon_id, self.host_name = host_taxon_id, host_name
+		self.host_taxon_id = "http://purl.obolibrary.org/obo/NCBITaxon_" + host_taxon_id.split("_")[1]
+		self.host_name = str(host_name)
 		self.assay_type = assay_type
 
 		self.output_path = output_path
@@ -74,22 +77,51 @@ class IEDBEpitopes:
 		-------
 		None
 		"""
-		assert isfile(join(self.cell_epitopes_path, "tcell_full_v3.csv")), "AssertionError: IEDB Tcell assays csv was not found in {}".format(self.cell_epitopes_path)
-		self.tcell_iedb_assays = read_csv(join(self.cell_epitopes_path, "tcell_full_v3.csv"), sep=",", header=1)
-		assert isfile(join(self.cell_epitopes_path,"bcell_full_v3.csv")), "AssertionError: IEDB Bcell assays csv was not found in {}".format(self.cell_epitopes_path)
-		self.bcell_iedb_assays = read_csv(join(self.cell_epitopes_path, "bcell_full_v3.csv"), sep=",", header=1)
+		assert isfile(join(self.cell_epitopes_path,
+		                   "tcell_full_v3_1000.csv")), "AssertionError: IEDB Tcell assays csv was not found in {}".format(
+			self.cell_epitopes_path)
+		self.tcell_iedb_assays = read_csv(join(self.cell_epitopes_path, "tcell_full_v3_1000.csv"), sep=",", header=1)
+		assert isfile(join(self.cell_epitopes_path,
+		                   "bcell_full_v3_1000.csv")), "AssertionError: IEDB Bcell assays csv was not found in {}".format(
+			self.cell_epitopes_path)
+		self.bcell_iedb_assays = read_csv(join(self.cell_epitopes_path, "bcell_full_v3_1000.csv"), sep=",", header=1)
 
-	def subset_iedb_assays_by_host_assay(self):
+	def subset_iedb_by_host_assay_type(self):
 		"""
+		Subset IEDB records by host taxon id and assay type
 
 		Returns
 		-------
-
+		None
 		"""
 		print("Get working subset of iedb assays")
 		if self.assay_type == "positive":
-			self.tcell_iedb_assays = self.tcell_iedb_assays[self.tcell_iedb_assays["Qualitative Measure"].str.contains(self.assay_type,case=False)]
-			print(self.tcell_iedb_assays.head())
+			print("Select positive assays")
+			self.tcell_iedb_assays = self.tcell_iedb_assays[
+				self.tcell_iedb_assays["Qualitative Measure"].str.contains(self.assay_type, case=False)]
+			# print(self.tcell_iedb_assays.head())
+			self.bcell_iedb_assays = self.bcell_iedb_assays[
+				self.bcell_iedb_assays["Qualitative Measure"].str.contains(self.assay_type, case=False)]
+		print(self.host_taxon_id)
+		print("Select epitopes experimental identified in host id: {} = {}".format(self.host_taxon_id.split("_")[1],
+		                                                                           self.host_name))
+		self.tcell_iedb_assays = self.tcell_iedb_assays[self.tcell_iedb_assays["Host IRI"] == self.host_taxon_id]
+		self.bcell_iedb_assays = self.bcell_iedb_assays[self.bcell_iedb_assays["Host IRI"] == self.host_taxon_id]
+		print(self.tcell_iedb_assays.head())
+
+	def subset_iedb_by_virus_id(self):
+		"""
+		Subset iedb record to get the ones related to virus id
+
+		Returns
+		-------
+		Pandas.DataFrame, Pandas.DataFrame
+			B-cell IEDB assays related only to virus id, T-cell IEDB assay only to virus id
+		"""
+		print("Get iedb only for taxon id={}".format(self.current_virus_taxon_id))
+		url_taxon_id = "http://purl.obolibrary.org/obo/NCBITaxon_" + str(self.current_virus_taxon_id)
+		return self.bcell_iedb_assays[self.bcell_iedb_assays["Organism IRI"] == url_taxon_id], self.tcell_iedb_assays[
+			self.tcell_iedb_assays["Organism IRI"] == url_taxon_id]
 
 	def process_all_viruses(self):
 		"""
@@ -97,10 +129,10 @@ class IEDBEpitopes:
 
 		Returns
 		-------
-
+		None
 		"""
 		print("Process all viruses found in {}".format(self.viruses_path))
-		self.subset_iedb_assays()
+		self.subset_iedb_by_host_assay_type()
 		with scandir(self.viruses_path) as viruses_dir:
 			for content in viruses_dir:
 				if content.is_dir() and "taxon_" in content.name:
@@ -125,7 +157,7 @@ class IEDBEpitopes:
 		self.current_virus_proteins = {}
 		with scandir(virus_proteins_path) as proteins_dir:
 			for proteins_content in proteins_dir:
-				print(proteins_content.name)
+				# print(proteins_content.name)
 				if is_fasta_file_extension(proteins_content.name) and proteins_content.is_file():
 					protein = Protein(join(virus_proteins_path, proteins_content.name))
 					protein.load()
@@ -134,7 +166,9 @@ class IEDBEpitopes:
 						print("Saving protein with id: {}".format(protein_id))
 						protein_rec = protein.get_record()
 						self.current_virus_proteins[protein_id] = protein_rec
+
 		print(self.current_virus_proteins)
+		print("====")
 
 	def process_virus_proteins(self, virus_proteins_path):
 		"""
@@ -153,21 +187,52 @@ class IEDBEpitopes:
 		print("=== Virus ===")
 		print("Process proteins of virus with taxon id: {}".format(self.current_virus_taxon_id))
 		self.load_virus_proteins(virus_proteins_path)
-		self.process_Bcells()
-		self.process_Tcells()
+		bcells_current_virus, tcells_current_virus = self.subset_iedb_by_virus_id()
+		print(tcells_current_virus.head())
 
-	def process_Bcells(self):
+	# self.process_Bcells()
+	# self.process_Tcells()
+
+	def process_Bcells(self, bcells_current_virus):
+		"""
+		Process B-cells assays for current virus
+
+		Parameters
+		----------
+		bcells_current_virus : Pandas.DataFrame
+			B-cells assays for current virus
+
+		Returns
+		-------
+
+		"""
 		print("Process B-cells")
 		for protein_id, protein_rec in self.current_virus_proteins.items():
 			print("---")
 			print("Process protein: {}".format(protein_id))
 			pass
+		print("====")
 
-	def process_Tcells(self):
+	def process_Tcells(self, tcells_current_virus):
+		"""
+		Process T-cells assays for current virus
+
+		Parameters
+		----------
+		tcells_current_virus : Pandas.DataFrame
+			T-cells assays for current virus
+
+		Returns
+		-------
+
+		"""
 		print("Process T-cells")
 		for protein_id, protein_rec in self.current_virus_proteins.items():
 			print("---")
 			print("Process protein: {}".format(protein_id))
-			subset_virus_protein = self.tcell_iedb_assays.loc[self.tcell_iedb_assays["Antigen IRI"].split("/")[-1] == protein_id and self.tcell_iedb_assays["Organism IRI"].split("_")[-1]==self.current_virus_taxon_id]
+			subset_virus_protein = self.tcell_iedb_assays.loc[
+				self.tcell_iedb_assays["Antigen IRI"].split("/")[-1] == protein_id and
+				self.tcell_iedb_assays["Organism IRI"].split("_")[-1] == self.current_virus_taxon_id]
 			for _, row in subset_virus_protein.iterrows():
 				print(row)
+		print("====")

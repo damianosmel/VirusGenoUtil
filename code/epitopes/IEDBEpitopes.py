@@ -2,7 +2,8 @@ from code.utils import is_fasta_file_extension
 from code.epitopes.Protein import Protein
 from os.path import join, splitext, isfile
 from os import scandir
-from pandas import read_csv
+from pandas import read_csv, unique
+from math import isnan, sqrt
 
 
 class IEDBEpitopes:
@@ -82,9 +83,9 @@ class IEDBEpitopes:
 			self.cell_epitopes_path)
 		self.tcell_iedb_assays = read_csv(join(self.cell_epitopes_path, "tcell_full_v3.csv"), sep=",", header=1)
 		assert isfile(join(self.cell_epitopes_path,
-		                   "bcell_full_v3.csv")), "AssertionError: IEDB Bcell assays csv was not found in {}".format(
+		                   "bcell_full_v3_1000.csv")), "AssertionError: IEDB Bcell assays csv was not found in {}".format(
 			self.cell_epitopes_path)
-		self.bcell_iedb_assays = read_csv(join(self.cell_epitopes_path, "bcell_full_v3.csv"), sep=",", header=1)
+		self.bcell_iedb_assays = read_csv(join(self.cell_epitopes_path, "bcell_full_v3_1000.csv"), sep=",", header=1)
 
 	def subset_iedb_by_host_assay_type(self):
 		"""
@@ -219,6 +220,112 @@ class IEDBEpitopes:
 			pass
 		print("====")
 
+	def map_epitope2allele(self, idbe_assay):
+		"""
+		Map epitopes to allele information
+
+		Parameters
+		----------
+		idbe_assay : Pandas.DataFrame
+			dataframe created from csv of IDBE assay tab
+		save_epitopes : bool
+			Save retrieved epitopes sequences (True), don't save (False)
+
+		Returns
+		-------
+		dict of str : str
+			dictionary mapping unique epitopes to their allele info
+		"""
+		print("Map unique epitope sequence to allele information")
+		uniq_epitopes2allele = {}
+		unique_epitopes = unique(idbe_assay["Description"])
+
+		for uniq_epi in unique_epitopes:
+			if uniq_epi not in uniq_epitopes2allele:
+				all_allele_names = []
+				for _, row in idbe_assay.loc[idbe_assay["Description"] == uniq_epi, ["Allele Name"]].iterrows():
+					allele = str(row["Allele Name"])
+					if "HLA" not in allele:
+						allele = "unknown"
+					else:
+						allele = allele.replace(" ", "_")
+					if allele not in all_allele_names:
+						all_allele_names.append(allele)
+
+				if "unknown" in all_allele_names and len(all_allele_names) > 1:
+					all_allele_names.remove("unknown")
+				uniq_epitopes2allele[uniq_epi] = ",".join(all_allele_names)
+
+		return uniq_epitopes2allele
+
+	def find_epitope_regions(self, protein_rec, epitopes):
+		"""
+		Find the epitopes regions (start-stop) in the protein record
+		Credits: Chapter 20.1.8 Biopython (http://biopython.org/DIST/docs/tutorial/Tutorial.html)
+		Parameters
+		----------
+		protein_rec : Bio.SeqIO.SeqRecord
+			protein record
+		epitopes : list of str
+			epitope sequences
+
+		Returns
+		-------
+			list of list of int
+			sorted list of start end position of epitopes regions
+		"""
+		print("Map unique epitope sequence to start end positions")
+		epi_regions = []
+		for epi in epitopes:
+			start = protein_rec.seq.find(epi)
+			if start != -1:
+				end = start + len(epi) - 1
+				epi_regions.append([start, end])
+		epi_regions.sort(key=lambda x: x[0])  # sort ascending by starting position
+		return epi_regions
+
+	def calculate_RF_score(self, idbe_assay, uniq_epitopes):
+		"""
+		Calculate RF score for T cell assays, using:
+		RF = (r-sqrt(r))/t,
+		where r is the # positive responding assays
+		and t is the # of the total tested assays
+
+		Parameters
+		----------
+		idbe_assay : Pandas.DataFrame
+			dataframe created from csv of IDBE assay tab
+		uniq_epitopes : list of str
+			list of unique epitope for which the RF score will be calculated
+
+		Returns
+		-------
+		dict of str : float
+			dictionary with key the unique epitope and the value the RF score
+		"""
+		print("Map unique epitope sequence to RF score")
+		rf_scores = {}
+		for epi in uniq_epitopes:
+			# sum r and t for all assays testing the current epitopte
+
+			t, r = 0.0, 0.0
+			for _, row in idbe_assay.loc[idbe_assay["Description"] == epi, ["Number of Subjects Tested",
+			                                                                "Number of Subjects Responded"]].iterrows():
+				if isnan(row["Number of Subjects Tested"]):
+					t = t + 1.0
+				else:
+					t = t + row["Number of Subjects Tested"]
+				if isnan(row["Number of Subjects Responded"]):
+					r = r + 1.0
+				else:
+					r = r + row["Number of Subjects Responded"]
+			if t == 0:
+				rf_score = 0.0
+			else:
+				rf_score = (r - sqrt(r)) / t
+			rf_scores[epi] = rf_score
+		return rf_scores
+
 	def process_Tcells(self, tcells_current_virus):
 		"""
 		Process T-cells assays for current virus
@@ -237,6 +344,16 @@ class IEDBEpitopes:
 			print("---")
 			print("Process protein name: {}".format(protein.get_name()))
 			tcells_current_protein = tcells_current_virus.loc[tcells_current_virus["Antigen Name"] == protein_id]
-			for _, row in tcells_current_protein.iterrows():
-				print(row)
+
+			# map epitope to allele
+			epitope2allele = self.map_epitope2allele(tcells_current_protein)
+
+			# save unique epitopes into fasta file
+			protein_record = self.proteins[protein_id].get_record()
+
+			# find epitope regions
+			epi_regions = self.find_epitope_regions(protein_record, list(epitope2allele.keys()))
+
+			# calculate RF score
+			epi2rf_score = self.calculate_RF_score(tcells_current_protein, list(epitope2allele.keys()))
 		print("====")

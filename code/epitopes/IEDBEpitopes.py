@@ -111,6 +111,7 @@ class IEDBEpitopes:
 			self.cell_epitopes_path)
 		self.bcell_iedb_assays = read_csv(join(self.cell_epitopes_path, "bcell_full_v3_1000.csv"), sep=",", header=1)
 
+
 	def subset_iedb_by_host_assay_type(self):
 		"""
 		Subset IEDB records by host taxon id and assay type
@@ -137,6 +138,18 @@ class IEDBEpitopes:
 
 		self.tcell_iedb_assays.to_csv(join(self.cell_epitopes_path, "tcell_positive_host.csv"), index=False)
 
+	def subset_Bcells_by_epi_type(self):
+		"""
+		Subset B cells to keep only B-cells linear and discontinuous epitopes
+
+		Returns
+		-------
+		None
+		"""
+		print("Select only linear or discontinuous epitopes")
+		self.bcell_iedb_assays = self.bcell_iedb_assays.loc[(self.bcell_iedb_assays["Object Type"] == "Discontinuous peptide") | (self.bcell_iedb_assays["Object Type"] == "Linear peptide")]
+		print("B cell subset number of non-unique epitopes: {}".format(self.bcell_iedb_assays.shape[0]))
+
 	def subset_iedb_by_virus_id(self):
 		"""
 		Subset iedb record to get the ones related to virus id
@@ -146,7 +159,6 @@ class IEDBEpitopes:
 		Pandas.DataFrame, Pandas.DataFrame
 			B-cell IEDB assays related only to virus id, T-cell IEDB assay only to virus id
 		"""
-		# self.current_virus_taxon_id = 694009
 		print("Get iedb only for taxon id={}".format(self.current_virus_taxon_id))
 		tcell_iedb_virus = self.tcell_iedb_assays[
 			self.tcell_iedb_assays["Organism IRI"].str.split("NCBITaxon_").str[-1] == self.current_virus_taxon_id]
@@ -166,6 +178,7 @@ class IEDBEpitopes:
 		"""
 		print("Process all viruses found in {}".format(self.viruses_path))
 		self.subset_iedb_by_host_assay_type()
+		self.subset_Bcells_by_epi_type()
 		with scandir(self.viruses_path) as viruses_dir:
 			for content in viruses_dir:
 				if content.is_dir() and "taxon_" in content.name:

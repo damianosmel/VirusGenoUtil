@@ -9,7 +9,7 @@ class Epitope:
 	new_id = itertools.count()
 
 	def __init__(self, virus_taxid, protein_ncbi_id, host_taxid, cell_type, hla_restriction, response_frequency,
-	             region_seq, region_start, region_stop, is_imported, prediction_process):
+	             region_seq, region_start, region_stop, is_imported, external_links, prediction_process):
 		"""
 		Epitope construstor
 
@@ -35,6 +35,8 @@ class Epitope:
 			epitope region stop
 		is_imported : bool
 			epitope information is imported (True), otherwise is predicted (False)
+		external_links : list of str
+			IEDB reference links
 		prediction_process : str
 			epitope identification process
 		"""
@@ -53,7 +55,8 @@ class Epitope:
 		self.region_stop = region_stop
 		self.is_imported = is_imported
 		self.prediction_process = prediction_process
-		self.is_linear = self.check_linearity()
+		self.external_links = external_links
+		self.is_linear = True  # self.check_linearity()
 		self.epitope_fragments = []
 		if not self.is_linear:
 			# self.fragment()
@@ -89,6 +92,8 @@ class Epitope:
 		        "region_start": self.region_start,
 		        "region_stop": self.region_stop,
 		        "is_imported": self.is_imported,
+		        "external_links": self.external_links,
 		        "prediction_process": self.prediction_process,
-		        "fragments": self.epitope_fragments
+		        "fragments": self.epitope_fragments,
+		        "is_linear": self.is_linear
 		        }

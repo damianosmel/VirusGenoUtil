@@ -1,4 +1,5 @@
 import itertools
+from code.epitopes.EpitopeFragment import EpitopeFragment
 
 
 class Epitope:
@@ -9,7 +10,7 @@ class Epitope:
 	new_id = itertools.count()
 
 	def __init__(self, virus_taxid, protein_ncbi_id, host_taxid, cell_type, hla_restriction, response_frequency,
-	             region_seq, region_start, region_stop, is_imported, external_links, prediction_process):
+	             region_seq, region_start, region_stop, is_imported, external_links, prediction_process, is_linear):
 		"""
 		Epitope construstor
 
@@ -39,6 +40,8 @@ class Epitope:
 			IEDB reference links
 		prediction_process : str
 			epitope identification process
+		is_linear : bool
+			is a linear epitope (True) otherwise is discontinuous (False)
 		"""
 		self.id = next(Epitope.new_id)
 		self.virus_taxid = virus_taxid
@@ -56,21 +59,56 @@ class Epitope:
 		self.is_imported = is_imported
 		self.prediction_process = prediction_process
 		self.external_links = external_links
-		self.is_linear = True  # self.check_linearity()
+		self.is_linear = is_linear
 		self.epitope_fragments = []
-		if not self.is_linear:
-			# self.fragment()
-			pass
-
-	def check_linearity(self):
-		pass
+		if not is_linear:
+			self.fragment()
 
 	def fragment(self):
-		# create epitope fragment for each start-stop
-		# ask to get all epitope fragments
-		pass
+		"""
+		Fragment discontinuous epitope into fragments
 
-	# add each epitope to the fragments
+		Returns
+		-------
+		None
+		"""
+		print("Fragment discontinuous epitope: {}".format(self.seq))
+		current_fragment_aa, current_fragment_pos = [], []
+		# get as very first previous position the first position of the discontinuous epitope
+		previous_position = int(self.seq.split(",")[0].strip()[1:]) - 1
+		for aa_pos in self.seq.split(","):
+			aa_pos = aa_pos.strip()
+			aa, pos = aa_pos[0], int(aa_pos[1:len(aa_pos)])
+			if pos == previous_position + 1:  # continue current fragment
+				current_fragment_aa.append(aa)
+				current_fragment_pos.append(pos)
+			else:  # current fragment has just finished
+				assert len(current_fragment_pos) == len(
+					current_fragment_aa), "AssertionError: identified fragment does not contain equal number of amino-acids and amino-acids positions"
+				epi_fragment = EpitopeFragment(self.id, ''.join(current_fragment_aa), current_fragment_pos[0],
+				                               current_fragment_pos[-1])
+				self.epitope_fragments.append(epi_fragment)
+				# start up the new fragment
+				current_fragment_aa = [aa]
+				current_fragment_pos = [pos]
+			previous_position = pos
+
+		# create the last fragment
+		assert len(current_fragment_pos) == len(
+			current_fragment_aa), "AssertionError: identified fragment does not contain equal number of amino-acids and amino-acids positions"
+		epi_fragment = EpitopeFragment(self.id, ''.join(current_fragment_aa), current_fragment_pos[0],
+		                               current_fragment_pos[-1])
+		self.epitope_fragments.append(epi_fragment)
+
+	def get_fragments(self):
+		"""
+		Get epitope fragments
+		Returns
+		-------
+		list of EpitopeFragment
+			list of epitope fragments for discontinuous epitope
+		"""
+		return self.epitope_fragments
 
 	def get_all_attributes(self):
 		"""

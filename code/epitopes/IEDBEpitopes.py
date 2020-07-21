@@ -1,5 +1,7 @@
 from code.utils import is_fasta_file_extension
 from code.epitopes.Protein import Protein
+from code.epitopes.Epitope import Epitope
+from code.epitopes.EpitopeFragment import EpitopeFragment
 from os.path import join, splitext, isfile
 from os import scandir
 from pandas import read_csv, unique
@@ -18,8 +20,7 @@ class IEDBEpitopes:
 	doi: 10.1093/nar/gky1006. PMID: 30357391
 	"""
 
-	def __init__(self, data_path, cell_epitopes_folder, viruses_folder, host_taxon_id, host_name, assay_type,
-	             output_path):
+	def __init__(self, data_path, cell_epitopes_folder, viruses_folder, host_taxon_id, host_name, assay_type, output_path):
 		"""
 
 		Parameters
@@ -48,14 +49,14 @@ class IEDBEpitopes:
 		self.viruses_path = join(data_path, viruses_folder)
 
 		self.tcell_iedb_assays, self.bcell_iedb_assays = None, None
-		self.host_taxon_id = "http://purl.obolibrary.org/obo/NCBITaxon_" + host_taxon_id.split("_")[1]
+		self.host_taxon_id = host_taxon_id.split("_")[1]
 		self.host_name = str(host_name)
 		self.assay_type = assay_type
-
+		self.url_prefix = "http://purl.obolibrary.org/obo/NCBITaxon_"
 		self.output_path = output_path
 		self.current_virus_proteins = {}
 		self.current_virus_taxon_id = None
-		self.current_epitopes = {}  # Epitope
+		self.current_virus_epitopes = []  # all Epitope objects for current virus
 
 		self.epitope_id = 0
 		self.epitope_fragment_id = 0
@@ -98,19 +99,22 @@ class IEDBEpitopes:
 		print("Get working subset of iedb assays")
 		if self.assay_type == "positive":
 			print("Select positive assays")
-			self.tcell_iedb_assays = self.tcell_iedb_assays[
+			self.tcell_iedb_assays = self.tcell_iedb_assays.loc[
 				self.tcell_iedb_assays["Qualitative Measure"].str.contains(self.assay_type, case=False)]
 			# print(self.tcell_iedb_assays.head())
-			self.bcell_iedb_assays = self.bcell_iedb_assays[
+			self.bcell_iedb_assays = self.bcell_iedb_assays.loc[
 				self.bcell_iedb_assays["Qualitative Measure"].str.contains(self.assay_type, case=False)]
-		print(self.host_taxon_id)
-		print("Select epitopes experimental identified in host id: {} = {}".format(self.host_taxon_id.split("_")[1],
-		                                                                           self.host_name))
-		self.tcell_iedb_assays = self.tcell_iedb_assays[self.tcell_iedb_assays["Host IRI"] == self.host_taxon_id]
-		self.bcell_iedb_assays = self.bcell_iedb_assays[self.bcell_iedb_assays["Host IRI"] == self.host_taxon_id]
-		print(self.bcell_iedb_assays.head())
-		print("--")
-		print(self.tcell_iedb_assays.head())
+
+		print("Select epitopes experimental identified in host id: {} = {}".format(self.host_taxon_id, self.host_name))
+		host_taxid = self.url_prefix + self.host_taxon_id
+		self.tcell_iedb_assays = self.tcell_iedb_assays.loc[self.tcell_iedb_assays["Host IRI"] == host_taxid]
+		self.bcell_iedb_assays = self.bcell_iedb_assays.loc[self.bcell_iedb_assays["Host IRI"] == host_taxid]
+		print("B cell subset number of non-unique epitopes: {}".format(self.bcell_iedb_assays.shape[0]))
+		print("T cell subset number of non-unique epitopes: {}".format(self.tcell_iedb_assays.shape[0]))
+		# print(self.bcell_iedb_assays["Host IRI"].head())
+		# print("--")
+		# print(self.tcell_iedb_assays["Host IRI"].head())
+		self.tcell_iedb_assays.to_csv(join(self.cell_epitopes_path, "tcell_positive_host.csv"),index=False)
 
 	def subset_iedb_by_virus_id(self):
 		"""
@@ -123,9 +127,11 @@ class IEDBEpitopes:
 		"""
 		# self.current_virus_taxon_id = 694009
 		print("Get iedb only for taxon id={}".format(self.current_virus_taxon_id))
-		url_taxon_id = "http://purl.obolibrary.org/obo/NCBITaxon_" + str(self.current_virus_taxon_id)
-		return self.bcell_iedb_assays[self.bcell_iedb_assays["Organism IRI"] == url_taxon_id], self.tcell_iedb_assays[
-			self.tcell_iedb_assays["Organism IRI"] == url_taxon_id]
+		tcell_iedb_virus = self.tcell_iedb_assays[self.tcell_iedb_assays["Organism IRI"].str.split("NCBITaxon_").str[-1] == self.current_virus_taxon_id]
+		bcell_iedb_virus = self.bcell_iedb_assays[self.bcell_iedb_assays["Organism IRI"].str.split("NCBITaxon_").str[-1] == self.current_virus_taxon_id]
+		print("B cell subset for virus contains {} non unique epitopes".format(bcell_iedb_virus.shape[0]))
+		print("T cell subset for virus contains {} non unique epitopes".format(tcell_iedb_virus.shape[0]))
+		return bcell_iedb_virus, tcell_iedb_virus
 
 	def process_all_viruses(self):
 		"""
@@ -171,7 +177,7 @@ class IEDBEpitopes:
 						# protein_rec = protein.get_record()
 						self.current_virus_proteins[protein_id] = protein
 
-		print(self.current_virus_proteins)
+		# print(self.current_virus_proteins)
 		print("====")
 
 	def process_virus_proteins(self, virus_proteins_path):
@@ -196,7 +202,7 @@ class IEDBEpitopes:
 		print(bcells_current_virus.head())
 		print("--")
 		print(tcells_current_virus.head())
-
+		tcells_current_virus.to_csv(join(self.cell_epitopes_path, "tcell_virus.csv"), index=False)
 		# self.process_Bcells(bcells_current_virus)
 		self.process_Tcells(tcells_current_virus)
 
@@ -343,17 +349,39 @@ class IEDBEpitopes:
 		for protein_id, protein in self.current_virus_proteins.items():
 			print("---")
 			print("Process protein name: {}".format(protein.get_name()))
-			tcells_current_protein = tcells_current_virus.loc[tcells_current_virus["Antigen Name"] == protein_id]
+			tcells_current_protein = tcells_current_virus.loc[tcells_current_virus["Antigen Name"] == protein.get_name()]
+			print("Non unique epitopes for protein = {}".format(tcells_current_protein.shape[0]))
+			# print(tcells_current_protein.head())
+			# print(tcells_current_protein.shape)
+			if tcells_current_protein.shape[0] == 0:
+				print("Skip protein as no epitopes are found in IEDB")
+			else:
+				# map epitope to allele
+				epitope2allele = self.map_epitope2allele(tcells_current_protein)
 
-			# map epitope to allele
-			epitope2allele = self.map_epitope2allele(tcells_current_protein)
+				# save unique epitopes into fasta file
+				protein_record = protein.get_record()
 
-			# save unique epitopes into fasta file
-			protein_record = self.proteins[protein_id].get_record()
+				# find epitope regions
+				epi_regions = self.find_epitope_regions(protein_record, list(epitope2allele.keys()))
 
-			# find epitope regions
-			epi_regions = self.find_epitope_regions(protein_record, list(epitope2allele.keys()))
+				# calculate RF score
+				epi2rf_score = self.calculate_RF_score(tcells_current_protein, list(epitope2allele.keys()))
 
-			# calculate RF score
-			epi2rf_score = self.calculate_RF_score(tcells_current_protein, list(epitope2allele.keys()))
+				# create an Epitope object for each identified IEDB epitope
+				host_taxon_id = self.host_taxon_id
+				is_imported = True
+				prediction_process = "IEDB import"
+
+				for i, region in enumerate(epi_regions):
+					reg_start, reg_end = region[0], region[-1] + 1
+					epi_frag = protein_record.seq[reg_start:reg_end]
+					reg_start = reg_start + 1  # increaase by one to convert 0-index to 1-index
+					assert epi_frag in epi2rf_score, "Epitope with sequence {} does not have calculated RF score".format(
+					epi_frag)
+					rf_score = float("{:.4f}".format(epi2rf_score[epi_frag]))
+					if rf_score > 0.0:
+						self.current_virus_epitopes.append(Epitope(self.current_virus_taxon_id, protein_id, host_taxon_id, "T cell", epitope2allele[epi_frag], rf_score, str(epi_frag), reg_start,reg_end,is_imported,prediction_process))
+				all_attributes = self.current_virus_epitopes[-1].get_all_attributes()
+				print(all_attributes)
 		print("====")

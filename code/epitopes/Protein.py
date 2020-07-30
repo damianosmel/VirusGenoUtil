@@ -1,4 +1,5 @@
 from Bio import SeqIO
+from os.path import basename
 
 
 class Protein:
@@ -68,17 +69,28 @@ class Protein:
 		"""
 		return self.record.id.split("|")[1]
 
+	def get_uniprot_id(self):
+		"""
+		Get protein uniprot id from file name
+
+		Returns
+		-------
+		str
+			uniprot id
+		"""
+		return basename(self.protein_file).split(".")[0]
+
 	def get_name(self):
 		"""
 		Get protein name from NCBI identifier
-		e.g. gi|1796318598|ref|YP_009724390.1|:1-1273 surface glycoprotein [Severe acute respiratory syndrome coronavirus 2]
-
+		e.g. for input= gi|1796318598|ref|YP_009724390.1|:1-1273 surface glycoprotein [Severe acute respiratory syndrome coronavirus 2]
+		output= surface glycoprotein
 		Returns
 		-------
 		str
 			extract protein name
 		"""
-		return self.record.description.split(self.record.name)[1].lstrip()
+		return self.record.description.split(self.record.name)[1].split("[")[0].lstrip()
 
 	def get_protein_length(self):
 		"""

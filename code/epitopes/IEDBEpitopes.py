@@ -54,7 +54,7 @@ class IEDBEpitopes:
 		self.host_taxon_id = host_taxon_id.split("_")[1]
 		self.host_name = str(host_name)
 		self.assay_type = assay_type
-		self.url_prefix = "http://purl.obolibrary.org/obo/NCBITaxon_"
+		self.url_prefixes = {"taxid":"http://purl.obolibrary.org/obo/NCBITaxon_","uniprot":"http://www.uniprot.org/uniprot/"}
 		self.output_path = output_path
 		self.current_virus_proteins = {}
 		self.current_virus_taxon_id = None
@@ -138,11 +138,11 @@ class IEDBEpitopes:
 		None
 		"""
 		assert isfile(join(self.cell_epitopes_path,
-		                   "tcell_full_v3.csv")), "AssertionError: IEDB Tcell assays csv was not found in {}".format(
+		                   "tcell_virus.csv")), "AssertionError: IEDB Tcell assays csv was not found in {}".format(
 			self.cell_epitopes_path)
 		self.tcell_iedb_assays = read_csv(join(self.cell_epitopes_path, "tcell_full_v3.csv"), sep=",", header=1)
 		assert isfile(join(self.cell_epitopes_path,
-		                   "bcell_full_v3.csv")), "AssertionError: IEDB Bcell assays csv was not found in {}".format(
+		                   "bcell_virus.csv")), "AssertionError: IEDB Bcell assays csv was not found in {}".format(
 			self.cell_epitopes_path)
 		self.bcell_iedb_assays = read_csv(join(self.cell_epitopes_path, "bcell_full_v3.csv"), sep=",", header=1)
 
@@ -164,7 +164,7 @@ class IEDBEpitopes:
 				self.bcell_iedb_assays["Qualitative Measure"].str.contains(self.assay_type, case=False)]
 
 		print("Select epitopes experimental identified in host id: {} = {}".format(self.host_taxon_id, self.host_name))
-		host_taxid = self.url_prefix + self.host_taxon_id
+		host_taxid = self.url_prefixes["taxid"] + self.host_taxon_id
 		self.tcell_iedb_assays = self.tcell_iedb_assays.loc[self.tcell_iedb_assays["Host IRI"] == host_taxid]
 		self.bcell_iedb_assays = self.bcell_iedb_assays.loc[self.bcell_iedb_assays["Host IRI"] == host_taxid]
 		print("B cell subset number of non-unique epitopes: {}".format(self.bcell_iedb_assays.shape[0]))
@@ -201,7 +201,9 @@ class IEDBEpitopes:
 		bcell_iedb_virus = self.bcell_iedb_assays[
 			self.bcell_iedb_assays["Organism IRI"].str.split("NCBITaxon_").str[-1] == self.current_virus_taxon_id]
 		print("B cell subset for virus contains {} non unique epitopes".format(bcell_iedb_virus.shape[0]))
+		print("B cell head: {}".format(bcell_iedb_virus.head()))
 		print("T cell subset for virus contains {} non unique epitopes".format(tcell_iedb_virus.shape[0]))
+		print("T cell head: {}".format(tcell_iedb_virus.head()))
 		return bcell_iedb_virus, tcell_iedb_virus
 
 	def process_all_viruses(self):
@@ -268,7 +270,8 @@ class IEDBEpitopes:
 		bcells_current_virus, tcells_current_virus = self.subset_iedb_by_virus_id()
 		self.current_virus_epitopes = []  # clear current virus epitopes
 		self.current_virus_epi_fragments = []  # clear current virus epitope fragments
-		tcells_current_virus.to_csv(join(self.cell_epitopes_path, "tcell_virus.csv"), index=False)
+		# tcells_current_virus.to_csv(join(self.cell_epitopes_path, "tcell_virus.csv"), index=False)
+		# bcells_current_virus.to_csv(join(self.cell_epitopes_path, "bcell_virus.csv"), index=False)
 		self.process_Bcells(bcells_current_virus)
 		self.process_Tcells(tcells_current_virus)
 
@@ -288,9 +291,10 @@ class IEDBEpitopes:
 		print("Process B-cells")
 		for protein_id, protein in self.current_virus_proteins.items():
 			print("---")
-			print("Process protein: {}".format(protein_id))
+			print("Process protein with uniprot id: {}".format(protein_id))
+			iedb_uniprot_id = self.url_prefixes["uniprot"] + protein.get_uniprot_id()
 			bcells_current_protein = bcells_current_virus.loc[
-				bcells_current_virus["Antigen Name"] == protein.get_name()]
+				bcells_current_virus["Parent Protein IRI"] == iedb_uniprot_id]
 			print("Number of non unique epitopes for protein = {}".format(bcells_current_protein.shape[0]))
 
 			if bcells_current_protein.shape[0] == 0:
@@ -298,13 +302,17 @@ class IEDBEpitopes:
 			else:
 				# map epitope to allele
 				epitope2allele = self.map_epitope2allele(bcells_current_protein, False)
+				print(list(epitope2allele.keys()))
+				print("***********")
 				# find epitope regions
 				# get protein record
 				protein_record = protein.get_record()
 				epi_regions, epi2region = self.find_epitope_regions(protein_record, list(epitope2allele.keys()))
 				# calculate RF score
 				epi2rf_score = self.calculate_RF_score(bcells_current_protein, list(epitope2allele.keys()))
-
+				print(epi2rf_score)
+				print("num of epitope scores: {}".format(len(epi2rf_score)))
+				print("*************")
 				# extract external links per unique epitope
 				epi2external_links = self.find_epitope_external_links(bcells_current_protein,
 				                                                      list(epitope2allele.keys()))
@@ -314,6 +322,8 @@ class IEDBEpitopes:
 				is_imported = True
 				prediction_process = "IEDB_import"
 				for i, uniq_epi in enumerate(list(epitope2allele.keys())):
+					print(uniq_epi)
+					print("**************")
 					region = epi2region[uniq_epi]
 					if region[0] == -1 and region[-1] == -1:  # discontinuous epitope
 						is_linear = False
@@ -324,13 +334,14 @@ class IEDBEpitopes:
 						reg_start, reg_end = region[0], region[-1] + 1
 						epi_frag = protein_record.seq[reg_start:reg_end]
 						reg_start = reg_start + 1  # increase by one to convert 0-index to 1-index
+					print(epi_frag)
+					print("***********")
 					assert epi_frag in epi2rf_score, "Epitope with sequence {} does not have calculated RF score".format(
 						epi_frag)
 					external_links = epi2external_links[epi_frag]
-					rf_score = float("{:.4f}".format(epi2rf_score[epi_frag]))
-					# if rf_score > 0.0:
-					epitope = Epitope(self.current_virus_taxon_id, protein_id, host_taxon_id, "B cell",
-					                  epitope2allele[epi_frag], rf_score, str(epi_frag), reg_start, reg_end,
+					if epi2rf_score[epi_frag] != "Null":  # if tested subjects information is given, export epitope
+						epitope = Epitope(self.current_virus_taxon_id, protein_id, host_taxon_id, "B cell",
+					                  epitope2allele[epi_frag], epi2rf_score[epi_frag], str(epi_frag), reg_start, reg_end,
 					                  is_imported, external_links, prediction_process, is_linear)
 					self.current_virus_epitopes.append(epitope)
 					if not is_linear:
@@ -356,12 +367,49 @@ class IEDBEpitopes:
 			discontinuous epitope start, discontinuous epitope end
 		"""
 		discontinuous_epi_aa_pos = epi_description.split(",")
-		aa_pos_start, aa_pos_end = discontinuous_epi_aa_pos[0].strip(), discontinuous_epi_aa_pos[-1].strip()
-		pos_start = int(aa_pos_start[1:len(aa_pos_start)])
-		pos_end = int(aa_pos_end[1:len(aa_pos_end)])
-		assert pos_end - pos_start >= 1, "AssertionError: current discontinuous epitope: {} has a fragment with larger pos_start than pos_end".format(
-			epi_description)
+		if epi_description[-1] != ",":
+			aa_pos_start, aa_pos_end = discontinuous_epi_aa_pos[0].strip(), discontinuous_epi_aa_pos[-1].strip()
+			pos_start = int(aa_pos_start[1:len(aa_pos_start)])
+			pos_end = int(aa_pos_end[1:len(aa_pos_end)])
+			assert pos_end - pos_start >= 1, "AssertionError: current discontinuous epitope: {} has a fragment with larger pos_start than pos_end".format(
+				epi_description)
+		else:  # only one position discontinuous epitope contain the comma at the end
+			aa_pos = discontinuous_epi_aa_pos[0].strip()
+			pos_start = int(aa_pos[1:len(aa_pos)])
+			pos_end = int(aa_pos[1:len(aa_pos)])
 		return pos_start, pos_end
+
+	def normalize_unique_epitope_sequences(self, uniq_epitopes):
+		"""
+		Normalize unique epitope sequences
+		Parameters
+		----------
+		uniq_epitope : list of str
+			unique epitopes
+		Returns
+		-------
+		list of str
+			normalized unique epitopes
+		"""
+		normalized_unique_epi = []
+		for epitope in uniq_epitopes:
+			if "," in epitope:
+				# case: Discontinuous peptide	T359, T363, K365, K390, G391, D392, R395,
+				normalized_epitope = epitope
+			elif "+" in epitope:
+				# case: Linear peptide	ALNCYWPLNDYGFYTTTGIGYQPYRVVVLSFEL + ACET(A1)
+				# remove the + ACET() information from the sequence
+				normalized_epitope = epitope.split("+")[0].strip()
+			elif epitope[1:].isdigit():
+				# case: Discontinuous peptide	P462
+				print(epitope)
+				normalized_epitope = epitope + ","
+			else:
+				# case: Linear peptide	APRITFGGPTDSTDNNQN
+				assert not epitope.isdigit(), "AssertionError: epitope={} should have been only aminoacid sequence".format(epitope)
+				normalized_epitope = epitope
+			normalized_unique_epi.append(normalized_epitope)
+		return normalized_unique_epi
 
 	def map_epitope2allele(self, idbe_assay, is_tcell):
 		"""
@@ -383,9 +431,10 @@ class IEDBEpitopes:
 		"""
 		print("Map unique epitope sequence to allele information")
 		uniq_epitopes2allele = {}
-		unique_epitopes = unique(idbe_assay["Description"])
+		uniq_epitopes = unique(idbe_assay["Description"])
+		normalized_epitopes = self.normalize_unique_epitope_sequences(uniq_epitopes)
 
-		for uniq_epi in unique_epitopes:
+		for uniq_epi in normalized_epitopes:
 			if is_tcell:
 				if uniq_epi not in uniq_epitopes2allele:
 					all_allele_names = []
@@ -403,7 +452,6 @@ class IEDBEpitopes:
 					uniq_epitopes2allele[uniq_epi] = ",".join(all_allele_names)
 			else:
 				uniq_epitopes2allele[uniq_epi] = "not applicable"
-
 		return uniq_epitopes2allele
 
 	def find_epitope_regions(self, protein_rec, epitopes):
@@ -428,10 +476,13 @@ class IEDBEpitopes:
 		epi_regions = []
 		epi2regions = {}
 		for epi in epitopes:
+			print(epi)
 			if "," in epi:  # discontinuous epitope
+				print("disc")
 				start, end = -1, -1
 				epi_regions.append([start, end])
 			else:
+				print("linear")
 				start = protein_rec.seq.find(epi)
 				if start != -1:
 					end = start + len(epi) - 1
@@ -481,14 +532,13 @@ class IEDBEpitopes:
 
 		Returns
 		-------
-		dict of str : float
-			dictionary with key the unique epitope and the value the RF score
+		dict of str : str
+			dictionary with key the unique epitope and RF score value
 		"""
 		print("Map unique epitope sequence to RF score")
 		rf_scores = {}
 		for epi in uniq_epitopes:
-			# sum r and t for all assays testing the current epitopte
-
+			# sum r and t for all assays testing the current epitope
 			t, r = 0.0, 0.0
 			for _, row in idbe_assay.loc[idbe_assay["Description"] == epi, ["Number of Subjects Tested",
 			                                                                "Number of Subjects Responded"]].iterrows():
@@ -500,11 +550,12 @@ class IEDBEpitopes:
 					r = r + 1.0
 				else:
 					r = r + row["Number of Subjects Responded"]
-			if t == 0:
-				rf_score = 0.0
+			if t == 0:  # no information of tested subjects from all occurences of the epitope
+				rf_score = "Null"
 			else:
-				rf_score = (r - sqrt(r)) / t
+				rf_score = str("{:.4f}".format((r - sqrt(r)) / t))
 			rf_scores[epi] = rf_score
+		assert len(rf_scores) == len(uniq_epitopes), "AssertionError: number of epitopes is not equal to the number of RF scores"
 		return rf_scores
 
 	def process_Tcells(self, tcells_current_virus):
@@ -523,9 +574,10 @@ class IEDBEpitopes:
 		print("Process T-cells")
 		for protein_id, protein in self.current_virus_proteins.items():
 			print("---")
-			print("Process protein name: {}".format(protein.get_name()))
+			print("Process protein with uniprot id: {}".format(protein_id))
+			iedb_uniprot_id = self.url_prefixes["uniprot"] + protein.get_uniprot_id()
 			tcells_current_protein = tcells_current_virus.loc[
-				tcells_current_virus["Antigen Name"] == protein.get_name()]
+				tcells_current_virus["Parent Protein IRI"] == iedb_uniprot_id]
 			print("Number of non unique epitopes for protein = {}".format(tcells_current_protein.shape[0]))
 
 			if tcells_current_protein.shape[0] == 0:
@@ -554,14 +606,13 @@ class IEDBEpitopes:
 				for i, region in enumerate(epi_regions):
 					reg_start, reg_end = region[0], region[-1] + 1
 					epi_frag = protein_record.seq[reg_start:reg_end]
-					reg_start = reg_start + 1  # increaase by one to convert 0-index to 1-index
+					reg_start = reg_start + 1  # increase by one to convert 0-index to 1-index
 					assert epi_frag in epi2rf_score, "Epitope with sequence {} does not have calculated RF score".format(
 						epi_frag)
 					external_links = epi2external_links[epi_frag]
-					rf_score = float("{:.4f}".format(epi2rf_score[epi_frag]))
-					if rf_score > 0.0:
+					if epi2rf_score[epi_frag] != "Null":  # if tested subjects information is given, export epitope
 						epitope = Epitope(self.current_virus_taxon_id, protein_id, host_taxon_id, "T cell",
-						                  epitope2allele[epi_frag], rf_score, str(epi_frag), reg_start, reg_end,
+						                  epitope2allele[epi_frag], epi2rf_score[epi_frag], str(epi_frag), reg_start, reg_end,
 						                  is_imported,
 						                  external_links, prediction_process, is_linear)
 						self.current_virus_epitopes.append(epitope)

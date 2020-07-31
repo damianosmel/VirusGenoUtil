@@ -286,7 +286,7 @@ class IEDBEpitopes:
 		bcells_current_virus, tcells_current_virus = self.subset_iedb_by_virus_id()
 		self.current_virus_epitopes = []  # clear current virus epitopes
 		self.current_virus_epi_fragments = []  # clear current virus epitope fragments
-		self.ncbi_iedb_not_equal.append("=== Virus taxid= {}===".format(self.current_virus_taxon_id))
+		self.ncbi_iedb_not_equal.append("=== Virus taxid={} ===".format(self.current_virus_taxon_id))
 		# tcells_current_virus.to_csv(join(self.cell_epitopes_path, "tcell_virus.csv"), index=False)
 		# bcells_current_virus.to_csv(join(self.cell_epitopes_path, "bcell_virus.csv"), index=False)
 		self.process_Bcells(bcells_current_virus)

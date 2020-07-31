@@ -289,8 +289,9 @@ class IEDBEpitopes:
 		self.ncbi_iedb_not_equal.append("=== Virus taxid= {}===".format(self.current_virus_taxon_id))
 		# tcells_current_virus.to_csv(join(self.cell_epitopes_path, "tcell_virus.csv"), index=False)
 		# bcells_current_virus.to_csv(join(self.cell_epitopes_path, "bcell_virus.csv"), index=False)
-		# self.process_Bcells(bcells_current_virus)
-		self.process_Tcells(tcells_current_virus)
+		self.process_Bcells(bcells_current_virus)
+
+	# self.process_Tcells(tcells_current_virus)
 
 	def process_Bcells(self, bcells_current_virus):
 		"""
@@ -317,57 +318,55 @@ class IEDBEpitopes:
 			if bcells_current_protein.shape[0] == 0:
 				print("Skip protein as no epitopes are found in IEDB")
 			else:
+				# normalize epitopes
+				normalized2unique = self.normalize_unique_epitope_sequences(bcells_current_protein)
 				# map epitope to allele
-				epitope2allele = self.map_epitope2allele(bcells_current_protein, False)
-				print(list(epitope2allele.keys()))
-				print("***********")
+				normalized2allele = self.map_epitope2allele(bcells_current_protein, normalized2unique, False)
 				# find epitope regions
 				# get protein record
 				protein_record = protein.get_record()
-				epi_regions, epi2region = self.find_epitope_regions(protein_record, list(epitope2allele.keys()))
+				epi_regions, normalized2regions = self.find_epitope_regions(protein_record, bcells_current_protein,
+				                                                            normalized2unique)
+
 				# calculate RF score
-				epi2rf_score = self.calculate_RF_score(bcells_current_protein, list(epitope2allele.keys()))
-				print(epi2rf_score)
-				print("num of epitope scores: {}".format(len(epi2rf_score)))
-				print("*************")
+				normalized2rf_score = self.calculate_RF_score(bcells_current_protein, normalized2unique)
+
 				# extract external links per unique epitope
-				epi2external_links = self.find_epitope_external_links(bcells_current_protein,
-				                                                      list(epitope2allele.keys()))
+				normalized2external_links = self.find_epitope_external_links(bcells_current_protein, normalized2unique)
 
 				# create an Epitope object for each identified IEDB epitope
 				host_taxon_id = self.host_taxon_id
 				is_imported = True
 				prediction_process = "IEDB_import"
-				for i, uniq_epi in enumerate(list(epitope2allele.keys())):
-					print(uniq_epi)
-					print("**************")
-					region = epi2region[uniq_epi]
+				for normalized, region in normalized2regions.items():
 					if region[0] == -1 and region[-1] == -1:  # discontinuous epitope
 						is_linear = False
-						reg_start, reg_end = self.get_discontinous_epi_start_stop(uniq_epi)
-						epi_frag = uniq_epi
-					else:
+						reg_start, reg_end = self.get_discontinous_epi_start_stop(normalized)
+					else:  # linear epitope
 						is_linear = True
-						reg_start, reg_end = region[0], region[-1] + 1
-						epi_frag = protein_record.seq[reg_start:reg_end]
-						reg_start = reg_start + 1  # increase by one to convert 0-index to 1-index
-					print(epi_frag)
-					print("***********")
-					assert epi_frag in epi2rf_score, "Epitope with sequence {} does not have calculated RF score".format(
-						epi_frag)
-					external_links = epi2external_links[epi_frag]
-					if epi2rf_score[epi_frag] != "Null":  # if tested subjects information is given, export epitope
+						# decrease by one the region start to convert 1-index to 0-index
+						reg_start, reg_end = region[0] - 1, region[-1]
+						ncbi_prot_epi = protein_record.seq[reg_start:reg_end]
+
+						if ncbi_prot_epi != normalized:  # append discordant epitopes
+							self.ncbi_iedb_not_equal.append(
+								"iedb frag:{}, ncbi prot:{}, iedb epitope link(s): {}".format(normalized, ncbi_prot_epi,
+								                                                              " ".join(
+									                                                              normalized2external_links[
+										                                                              normalized])))
+					external_links = normalized2external_links[normalized]
+					if normalized2rf_score[
+						normalized] != "Null":  # if tested subjects information is given, export epitope
 						epitope = Epitope(self.current_virus_taxon_id, protein_id, host_taxon_id, "B cell",
-						                  epitope2allele[epi_frag], epi2rf_score[epi_frag], str(epi_frag), reg_start,
-						                  reg_end,
-						                  is_imported, external_links, prediction_process, is_linear)
+						                  normalized2allele[normalized], normalized2rf_score[normalized],
+						                  str(normalized), reg_start,
+						                  reg_end, is_imported, external_links, prediction_process, is_linear)
 					self.current_virus_epitopes.append(epitope)
 					if not is_linear:
-						print("discontinuous epitope description: {}".format(epi_frag))
-						print("fragments = {}".format(epitope.get_fragments()))
 						self.current_virus_epi_fragments = self.current_virus_epi_fragments + epitope.get_fragments()
-					all_attributes = self.current_virus_epitopes[-1].get_all_attributes()
-					print(all_attributes)
+				# print inspection: for each protein print last epitope
+				all_attributes = self.current_virus_epitopes[-1].get_all_attributes()
+				print(all_attributes)
 		print("====")
 
 	def get_discontinous_epi_start_stop(self, epi_description):
@@ -412,24 +411,23 @@ class IEDBEpitopes:
 		"""
 		uniq_epitopes = unique(iedb_assay["Description"])
 		normalized2unique = {}
-		for epitope in uniq_epitopes:
-			if "," in epitope:
+		for uniq_epi in uniq_epitopes:
+			if "," in uniq_epi:
 				# case: Discontinuous peptide	T359, T363, K365, K390, G391, D392, R395,
-				normalized_epitope = epitope
-			elif "+" in epitope:
+				normalized = uniq_epi
+			elif "+" in uniq_epi:
 				# case: Linear peptide	ALNCYWPLNDYGFYTTTGIGYQPYRVVVLSFEL + ACET(A1)
 				# remove the + ACET() information from the sequence
-				normalized_epitope = epitope.split("+")[0].strip()
-			elif epitope[1:].isdigit():
-				# case: Discontinuous peptide	P462
-				print(epitope)
-				normalized_epitope = epitope + ","
+				normalized = uniq_epi.split("+")[0].strip()
+			elif uniq_epi[1:].isdigit():
+				# case: Discontinuous peptide (of one base)	P462
+				normalized = uniq_epi + ","
 			else:
 				# case: Linear peptide	APRITFGGPTDSTDNNQN
-				assert not epitope.isdigit(), "AssertionError: epitope={} should have been only aminoacid sequence".format(
-					epitope)
-				normalized_epitope = epitope
-			normalized2unique[epitope] = normalized_epitope
+				assert not uniq_epi.isdigit(), "AssertionError: epitope={} should have been only aminoacid sequence".format(
+					uniq_epi)
+				normalized = uniq_epi
+			normalized2unique[normalized] = uniq_epi
 		return normalized2unique
 
 	def map_epitope2allele(self, iedb_assay, normalized2unique, is_tcell):
@@ -571,7 +569,7 @@ class IEDBEpitopes:
 				rf_score = "Null"
 			else:
 				rf_score = str("{:.4f}".format((r - sqrt(r)) / t))
-			rf_scores[unique] = rf_score
+			rf_scores[normalized] = rf_score
 		assert len(rf_scores) == len(list(
 			normalized2unique.keys())), "AssertionError: number of epitopes is not equal to the number of RF scores"
 		return rf_scores
@@ -587,7 +585,7 @@ class IEDBEpitopes:
 
 		Returns
 		-------
-
+		None
 		"""
 		print("Process T-cells")
 		self.ncbi_iedb_not_equal.append("T-cells:")
@@ -624,30 +622,20 @@ class IEDBEpitopes:
 				is_imported = True
 				prediction_process = "IEDB_import"
 				is_linear = True  # default for T cells
-				# for i, region in enumerate(epi_regions):
 				for normalized, region in normalized2regions.items():
-					epi_frag = normalized
 					external_links = normalized2external_links[normalized]
 					# decrease by one the region start to convert 1-index to 0-index
 					reg_start, reg_end = region[0] - 1, region[-1]
 					ncbi_prot_epi = protein_record.seq[reg_start:reg_end]
-					if ncbi_prot_epi != epi_frag:
+					if ncbi_prot_epi != normalized:  # append discordant epitopes
 						self.ncbi_iedb_not_equal.append(
-							"iedb frag:{}, ncbi prot:{}, iedb epitope link(s): {}".format(epi_frag, ncbi_prot_epi,
+							"iedb frag:{}, ncbi prot:{}, iedb epitope link(s): {}".format(normalized, ncbi_prot_epi,
 							                                                              " ".join(external_links)))
-					# print(reg_start,reg_end)
-					# print(normalized)
-					# print(epi_frag)
-					# print("*********")
-					# assert epi_frag == normalized, "AssertionError: normalized epitope and epitope fragment are not equal"
-					# reg_start = reg_start
-					# assert epi_frag in normalized2rf_score, "Epitope with sequence {} does not have calculated RF score".format(
-					# 	epi_frag)
-
 					if normalized2rf_score[
 						normalized] != "Null":  # if tested subjects information is given, export epitope
 						epitope = Epitope(self.current_virus_taxon_id, protein_id, host_taxon_id, "T cell",
-						                  normalized2allele[normalized], normalized2rf_score[normalized], str(epi_frag),
+						                  normalized2allele[normalized], normalized2rf_score[normalized],
+						                  str(normalized),
 						                  reg_start, reg_end,
 						                  is_imported,
 						                  external_links, prediction_process, is_linear)

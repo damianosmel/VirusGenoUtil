@@ -76,22 +76,25 @@ class Epitope:
 		current_fragment_aa, current_fragment_pos = [], []
 		# get as very first previous position the first position of the discontinuous epitope
 		previous_position = int(self.seq.split(",")[0].strip()[1:]) - 1
-		for aa_pos in self.seq.split(","):
+		for aa_pos in self.seq.strip().split(","):
 			aa_pos = aa_pos.strip()
-			aa, pos = aa_pos[0], int(aa_pos[1:len(aa_pos)])
-			if pos == previous_position + 1:  # continue current fragment
-				current_fragment_aa.append(aa)
-				current_fragment_pos.append(pos)
-			else:  # current fragment has just finished
-				assert len(current_fragment_pos) == len(
-					current_fragment_aa), "AssertionError: identified fragment does not contain equal number of amino-acids and amino-acids positions"
-				epi_fragment = EpitopeFragment(self.id, ''.join(current_fragment_aa), current_fragment_pos[0],
-				                               current_fragment_pos[-1])
-				self.epitope_fragments.append(epi_fragment)
-				# start up the new fragment
-				current_fragment_aa = [aa]
-				current_fragment_pos = [pos]
-			previous_position = pos
+			if aa_pos != "":  # if pos contains amino-acid, process it
+				aa, pos = aa_pos[0], int(aa_pos[1:len(aa_pos)])
+				if pos == previous_position + 1:  # continue current fragment
+					current_fragment_aa.append(aa)
+					current_fragment_pos.append(pos)
+				elif self.seq.count(",") > 1:
+					# current fragment is bigger than one amino-acid
+					# current fragment has just finished
+					assert len(current_fragment_pos) == len(
+						current_fragment_aa), "AssertionError: identified fragment does not contain equal number of amino-acids and amino-acids positions"
+					epi_fragment = EpitopeFragment(self.id, ''.join(current_fragment_aa), current_fragment_pos[0],
+					                               current_fragment_pos[-1])
+					self.epitope_fragments.append(epi_fragment)
+					# start up the new fragment
+					current_fragment_aa = [aa]
+					current_fragment_pos = [pos]
+				previous_position = pos
 
 		# create the last fragment
 		assert len(current_fragment_pos) == len(

@@ -306,6 +306,7 @@ class IEDBEpitopes:
 
 		"""
 		print("Process B-cells")
+		self.ncbi_iedb_not_equal.append("B-cells:")
 		for protein_id, protein in self.current_virus_proteins.items():
 			print("---")
 			print("Process protein with uniprot id: {}".format(protein_id))

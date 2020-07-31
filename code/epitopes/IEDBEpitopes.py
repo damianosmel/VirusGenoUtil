@@ -290,8 +290,7 @@ class IEDBEpitopes:
 		# tcells_current_virus.to_csv(join(self.cell_epitopes_path, "tcell_virus.csv"), index=False)
 		# bcells_current_virus.to_csv(join(self.cell_epitopes_path, "bcell_virus.csv"), index=False)
 		self.process_Bcells(bcells_current_virus)
-
-	# self.process_Tcells(tcells_current_virus)
+		self.process_Tcells(tcells_current_virus)
 
 	def process_Bcells(self, bcells_current_virus):
 		"""
@@ -323,14 +322,9 @@ class IEDBEpitopes:
 				# map epitope to allele
 				normalized2allele = self.map_epitope2allele(bcells_current_protein, normalized2unique, False)
 				# find epitope regions
-				# get protein record
-				protein_record = protein.get_record()
-				epi_regions, normalized2regions = self.find_epitope_regions(protein_record, bcells_current_protein,
-				                                                            normalized2unique)
-
+				epi_regions, normalized2regions = self.find_epitope_regions(bcells_current_protein, normalized2unique)
 				# calculate RF score
 				normalized2rf_score = self.calculate_RF_score(bcells_current_protein, normalized2unique)
-
 				# extract external links per unique epitope
 				normalized2external_links = self.find_epitope_external_links(bcells_current_protein, normalized2unique)
 
@@ -338,6 +332,8 @@ class IEDBEpitopes:
 				host_taxon_id = self.host_taxon_id
 				is_imported = True
 				prediction_process = "IEDB_import"
+				# get protein record
+				protein_record = protein.get_record()
 				for normalized, region in normalized2regions.items():
 					if region[0] == -1 and region[-1] == -1:  # discontinuous epitope
 						is_linear = False
@@ -472,14 +468,11 @@ class IEDBEpitopes:
 				normalized2allele[normalized_epi] = "not applicable"
 		return normalized2allele
 
-	def find_epitope_regions(self, protein_rec, iedb_assay, normalized2unique):
+	def find_epitope_regions(self, iedb_assay, normalized2unique):
 		"""
-		Find the epitopes regions (start-stop) in the protein record
-		Credits: Chapter 20.1.8 Biopython (http://biopython.org/DIST/docs/tutorial/Tutorial.html)
+		Find the epitopes regions using IEDB start end coordinates
 		Parameters
 		----------
-		protein_rec : Bio.SeqIO.SeqRecord
-			protein record
 		iedb_assay : Pandas.DataFrame
 			dataframe created from csv of IEDB assay tab
 		normalized2unique : dict of str : str
@@ -604,16 +597,10 @@ class IEDBEpitopes:
 				normalized2unique = self.normalize_unique_epitope_sequences(tcells_current_protein)
 				# map epitope to allele
 				normalized2allele = self.map_epitope2allele(tcells_current_protein, normalized2unique, True)
-
 				# find epitope regions
-				# get protein record
-				protein_record = protein.get_record()
-				epi_regions, normalized2regions = self.find_epitope_regions(protein_record, tcells_current_protein,
-				                                                            normalized2unique)
-
+				epi_regions, normalized2regions = self.find_epitope_regions(tcells_current_protein, normalized2unique)
 				# calculate RF score
 				normalized2rf_score = self.calculate_RF_score(tcells_current_protein, normalized2unique)
-
 				# extract external links per unique epitope
 				normalized2external_links = self.find_epitope_external_links(tcells_current_protein, normalized2unique)
 
@@ -622,6 +609,8 @@ class IEDBEpitopes:
 				is_imported = True
 				prediction_process = "IEDB_import"
 				is_linear = True  # default for T cells
+				# get protein record
+				protein_record = protein.get_record()
 				for normalized, region in normalized2regions.items():
 					external_links = normalized2external_links[normalized]
 					# decrease by one the region start to convert 1-index to 0-index

@@ -55,9 +55,9 @@ class Protein:
 		"""
 		return self.record
 
-	def get_short_id(self):
+	def get_ncbi_id(self):
 		"""
-		Get protein short id
+		Get protein NCBI id
 
 		Parameters
 		----------
@@ -67,7 +67,7 @@ class Protein:
 		str
 			protein short id
 		"""
-		return self.record.id.split("|")[1]
+		return self.record.id.split("|")[3]
 
 	def get_uniprot_id(self):
 		"""

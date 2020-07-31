@@ -140,11 +140,11 @@ class IEDBEpitopes:
 		None
 		"""
 		assert isfile(join(self.cell_epitopes_path,
-		                   "tcell_virus.csv")), "AssertionError: IEDB Tcell assays csv was not found in {}".format(
+		                   "tcell_full_v3.csv")), "AssertionError: IEDB Tcell assays csv was not found in {}".format(
 			self.cell_epitopes_path)
 		self.tcell_iedb_assays = read_csv(join(self.cell_epitopes_path, "tcell_full_v3.csv"), sep=",", header=1)
 		assert isfile(join(self.cell_epitopes_path,
-		                   "bcell_virus.csv")), "AssertionError: IEDB Bcell assays csv was not found in {}".format(
+		                   "bcell_full_v3.csv")), "AssertionError: IEDB Bcell assays csv was not found in {}".format(
 			self.cell_epitopes_path)
 		self.bcell_iedb_assays = read_csv(join(self.cell_epitopes_path, "bcell_full_v3.csv"), sep=",", header=1)
 
@@ -287,8 +287,8 @@ class IEDBEpitopes:
 		self.current_virus_epitopes = []  # clear current virus epitopes
 		self.current_virus_epi_fragments = []  # clear current virus epitope fragments
 		self.ncbi_iedb_not_equal.append("=== Virus taxid={} ===".format(self.current_virus_taxon_id))
-		# tcells_current_virus.to_csv(join(self.cell_epitopes_path, "tcell_virus.csv"), index=False)
-		# bcells_current_virus.to_csv(join(self.cell_epitopes_path, "bcell_virus.csv"), index=False)
+		tcells_current_virus.to_csv(join(self.cell_epitopes_path, "tcell_virus.csv"), index=False)
+		bcells_current_virus.to_csv(join(self.cell_epitopes_path, "bcell_virus.csv"), index=False)
 		self.process_Bcells(bcells_current_virus)
 		self.process_Tcells(tcells_current_virus)
 
@@ -353,7 +353,7 @@ class IEDBEpitopes:
 					external_links = normalized2external_links[normalized]
 					if normalized2rf_score[
 						normalized] != "Null":  # if tested subjects information is given, export epitope
-						epitope = Epitope(self.current_virus_taxon_id, protein_id, host_taxon_id, "B cell",
+						epitope = Epitope(self.current_virus_taxon_id, protein.get_ncbi_id(), host_taxon_id, "B cell",
 						                  normalized2allele[normalized], normalized2rf_score[normalized],
 						                  str(normalized), reg_start,
 						                  reg_end, is_imported, external_links, prediction_process, is_linear)
@@ -622,7 +622,7 @@ class IEDBEpitopes:
 							                                                              " ".join(external_links)))
 					if normalized2rf_score[
 						normalized] != "Null":  # if tested subjects information is given, export epitope
-						epitope = Epitope(self.current_virus_taxon_id, protein_id, host_taxon_id, "T cell",
+						epitope = Epitope(self.current_virus_taxon_id, protein.get_ncbi_id(), host_taxon_id, "T cell",
 						                  normalized2allele[normalized], normalized2rf_score[normalized],
 						                  str(normalized),
 						                  reg_start, reg_end,

@@ -90,7 +90,7 @@ class Protein:
 		str
 			extract protein name
 		"""
-		return self.record.description.split(self.record.name)[1].split("[")[0].lstrip()
+		return self.record.description.split(self.record.name)[1].split("[")[0].strip()
 
 	def get_protein_length(self):
 		"""

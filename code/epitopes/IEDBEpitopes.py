@@ -303,7 +303,7 @@ class IEDBEpitopes:
 
 		Returns
 		-------
-
+		None
 		"""
 		print("Process B-cells")
 		self.ncbi_iedb_not_equal.append("B-cells:")
@@ -313,6 +313,14 @@ class IEDBEpitopes:
 			iedb_uniprot_id = self.url_prefixes["uniprot"] + protein.get_uniprot_id()
 			bcells_current_protein = bcells_current_virus.loc[
 				bcells_current_virus["Parent Protein IRI"] == iedb_uniprot_id]
+			print(protein.get_name().lower())
+			print("*********")
+			if bcells_current_protein.shape[0] == 0:
+				print("Could not match using uniprot")
+				print("2nd attempt: Match with protein name")
+				bcells_current_protein = bcells_current_virus.loc[
+					bcells_current_virus["Parent Protein"].str.split("[").str[
+						0].str.strip().str.lower() == protein.get_name().lower()]
 			print("Number of non unique epitopes for protein = {}".format(bcells_current_protein.shape[0]))
 
 			if bcells_current_protein.shape[0] == 0:
@@ -589,6 +597,14 @@ class IEDBEpitopes:
 			iedb_uniprot_id = self.url_prefixes["uniprot"] + protein.get_uniprot_id()
 			tcells_current_protein = tcells_current_virus.loc[
 				tcells_current_virus["Parent Protein IRI"] == iedb_uniprot_id]
+
+			if tcells_current_protein.shape[0] == 0:
+				print("Could not match using uniprot id")
+				print("2nd attempt: Match with protein name")
+				print(protein.get_name())
+				tcells_current_protein = tcells_current_virus.loc[
+					tcells_current_virus["Parent Protein"].str.split("[").str[
+						0].str.strip().str.lower() == protein.get_name()]
 			print("Number of non unique epitopes for protein = {}".format(tcells_current_protein.shape[0]))
 
 			if tcells_current_protein.shape[0] == 0:

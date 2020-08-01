@@ -202,9 +202,15 @@ class IEDBEpitopes:
 		tcell_iedb_virus = self.tcell_iedb_assays.loc[
 			self.tcell_iedb_assays["Parent Species IRI"].str.split("NCBITaxon_").str[
 				-1].str.strip() == self.current_virus_taxon_id]
+		if tcell_iedb_virus.shape[0] == 0:
+			print("2nd attempt: Match with Organism IRI")
+			tcell_iedb_virus = self.tcell_iedb_assays.loc[self.tcell_iedb_assays["Organism IRI"].str.split("NCBITaxon_").str[-1].str.strip() == self.current_virus_taxon_id]
 		bcell_iedb_virus = self.bcell_iedb_assays.loc[
 			self.bcell_iedb_assays["Parent Species IRI"].str.split("NCBITaxon_").str[
 				-1].str.strip() == self.current_virus_taxon_id]
+		if bcell_iedb_virus.shape[0] == 0:
+			print("2nd attempt: Match with Organism IRI")
+			bcell_iedb_virus = self.bcell_iedb_assays.loc[self.bcell_iedb_assays["Organism IRI"].str.split("NCBITaxon_").str[-1].str.strip() == self.current_virus_taxon_id]
 		print("B cell subset for virus contains {} non unique epitopes".format(bcell_iedb_virus.shape[0]))
 		print("B cell head: {}".format(bcell_iedb_virus.head()))
 		print("T cell subset for virus contains {} non unique epitopes".format(tcell_iedb_virus.shape[0]))
@@ -503,19 +509,24 @@ class IEDBEpitopes:
 				start, end = -1, -1
 				epi_regions.append([start, end])
 			else:
-				start = int(iedb_assay.loc[iedb_assay["Description"] == unique, "Starting Position"].iloc[0])
-				end = int(iedb_assay.loc[iedb_assay["Description"] == unique, "Ending Position"].iloc[0])
+				for _, row in iedb_assay.loc[iedb_assay["Description"] == unique].iterrows():
+					if not isnan(row["Starting Position"]):
+						print(row["Starting Position"])
+						print("********")
+						start = int(row["Starting Position"])
+						end = int(row["Ending Position"])
+						break
 			epi2regions[normalized] = [start, end]
 		epi_regions.sort(key=lambda x: x[0])  # sort ascending by starting position
 		return epi_regions, epi2regions
 
-	def find_epitope_external_links(self, idbe_assay, normalized2unique):
+	def find_epitope_external_links(self, iedb_assay, normalized2unique):
 		"""
 		Find external links for each unique epitope
 
 		Parameters
 		----------
-		idbe_assay : Pandas.DataFrame
+		iedb_assay : Pandas.DataFrame
 			dataframe created from csv of IDBE assay tab
 		normalized2unique : dict of str : str
 			dictionary mapping normalized epitopes to unique sequence
@@ -529,7 +540,7 @@ class IEDBEpitopes:
 		epi2external_links = {}
 		for normalized, unique in normalized2unique.items():
 			epi2external_links[normalized] = []
-			for _, row in idbe_assay.loc[idbe_assay["Description"] == unique, ["Reference IRI"]].iterrows():
+			for _, row in iedb_assay.loc[iedb_assay["Description"] == unique, ["Reference IRI"]].iterrows():
 				if str(row["Reference IRI"]) not in epi2external_links[normalized]:
 					epi2external_links[normalized].append(str(row["Reference IRI"]))
 		return epi2external_links

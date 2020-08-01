@@ -511,8 +511,6 @@ class IEDBEpitopes:
 			else:
 				for _, row in iedb_assay.loc[iedb_assay["Description"] == unique].iterrows():
 					if not isnan(row["Starting Position"]):
-						print(row["Starting Position"])
-						print("********")
 						start = int(row["Starting Position"])
 						end = int(row["Ending Position"])
 						break

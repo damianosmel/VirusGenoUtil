@@ -199,9 +199,9 @@ class IEDBEpitopes:
 		"""
 		print("Get iedb only for taxon id={}".format(self.current_virus_taxon_id))
 		tcell_iedb_virus = self.tcell_iedb_assays[
-			self.tcell_iedb_assays["Organism IRI"].str.split("NCBITaxon_").str[-1] == self.current_virus_taxon_id]
+			self.tcell_iedb_assays["Organism IRI"].str.split("NCBITaxon_").str[-1].str.strip() == self.current_virus_taxon_id]
 		bcell_iedb_virus = self.bcell_iedb_assays[
-			self.bcell_iedb_assays["Organism IRI"].str.split("NCBITaxon_").str[-1] == self.current_virus_taxon_id]
+			self.bcell_iedb_assays["Organism IRI"].str.split("NCBITaxon_").str[-1].str.strip() == self.current_virus_taxon_id]
 		print("B cell subset for virus contains {} non unique epitopes".format(bcell_iedb_virus.shape[0]))
 		print("B cell head: {}".format(bcell_iedb_virus.head()))
 		print("T cell subset for virus contains {} non unique epitopes".format(tcell_iedb_virus.shape[0]))
@@ -313,8 +313,6 @@ class IEDBEpitopes:
 			iedb_uniprot_id = self.url_prefixes["uniprot"] + protein.get_uniprot_id()
 			bcells_current_protein = bcells_current_virus.loc[
 				bcells_current_virus["Parent Protein IRI"] == iedb_uniprot_id]
-			print(protein.get_name().lower())
-			print("*********")
 			if bcells_current_protein.shape[0] == 0:
 				print("Could not match using uniprot")
 				print("2nd attempt: Match with protein name")
@@ -601,10 +599,9 @@ class IEDBEpitopes:
 			if tcells_current_protein.shape[0] == 0:
 				print("Could not match using uniprot id")
 				print("2nd attempt: Match with protein name")
-				print(protein.get_name())
 				tcells_current_protein = tcells_current_virus.loc[
 					tcells_current_virus["Parent Protein"].str.split("[").str[
-						0].str.strip().str.lower() == protein.get_name()]
+						0].str.strip().str.lower() == protein.get_name().lower()]
 			print("Number of non unique epitopes for protein = {}".format(tcells_current_protein.shape[0]))
 
 			if tcells_current_protein.shape[0] == 0:

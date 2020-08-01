@@ -198,10 +198,13 @@ class IEDBEpitopes:
 			B-cell IEDB assays related only to virus id, T-cell IEDB assay only to virus id
 		"""
 		print("Get iedb only for taxon id={}".format(self.current_virus_taxon_id))
-		tcell_iedb_virus = self.tcell_iedb_assays[
-			self.tcell_iedb_assays["Organism IRI"].str.split("NCBITaxon_").str[-1].str.strip() == self.current_virus_taxon_id]
-		bcell_iedb_virus = self.bcell_iedb_assays[
-			self.bcell_iedb_assays["Organism IRI"].str.split("NCBITaxon_").str[-1].str.strip() == self.current_virus_taxon_id]
+
+		tcell_iedb_virus = self.tcell_iedb_assays.loc[
+			self.tcell_iedb_assays["Parent Species IRI"].str.split("NCBITaxon_").str[
+				-1].str.strip() == self.current_virus_taxon_id]
+		bcell_iedb_virus = self.bcell_iedb_assays.loc[
+			self.bcell_iedb_assays["Parent Species IRI"].str.split("NCBITaxon_").str[
+				-1].str.strip() == self.current_virus_taxon_id]
 		print("B cell subset for virus contains {} non unique epitopes".format(bcell_iedb_virus.shape[0]))
 		print("B cell head: {}".format(bcell_iedb_virus.head()))
 		print("T cell subset for virus contains {} non unique epitopes".format(tcell_iedb_virus.shape[0]))
@@ -305,7 +308,7 @@ class IEDBEpitopes:
 		-------
 		None
 		"""
-		print("Process B-cells")
+		print("\nProcess B-cells")
 		self.ncbi_iedb_not_equal.append("B-cells:")
 		for protein_id, protein in self.current_virus_proteins.items():
 			print("---")
@@ -587,7 +590,7 @@ class IEDBEpitopes:
 		-------
 		None
 		"""
-		print("Process T-cells")
+		print("\nProcess T-cells")
 		self.ncbi_iedb_not_equal.append("T-cells:")
 		for protein_id, protein in self.current_virus_proteins.items():
 			print("---")

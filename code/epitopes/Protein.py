@@ -67,7 +67,10 @@ class Protein:
 		str
 			protein short id
 		"""
-		return self.record.id.split("|")[3]
+		if "|" in self.record.id:
+			return self.record.id.split("|")[3]
+		else:
+			return self.record.id.strip()
 
 	def get_uniprot_id(self):
 		"""

@@ -2,7 +2,8 @@ from code.utils import is_fasta_file_extension
 from code.epitopes.Protein import Protein
 from code.epitopes.Epitope import Epitope
 from code.epitopes.EpitopeFragment import EpitopeFragment
-from os.path import join, splitext, isfile, exists
+from os.path import join, splitext, isfile, exists, isdir
+from pathlib import Path
 from os import scandir
 from pandas import read_csv, unique
 from math import isnan, sqrt
@@ -66,6 +67,26 @@ class IEDBEpitopes:
 		self.epitope_fragment_id = 0
 		self.load_iedb_csvs()
 
+	def get_virus_epi_fragments(self):
+		"""
+		Get current virus epitope fragments in list of tuples
+
+		Returns
+		-------
+		list of tuple
+			all epitope fragments of virus
+		"""
+		print("Return all epitope fragments of virus taxid={}".format(self.current_virus_taxon_id))
+		epi_fragments = []
+		for epi_fragment in self.current_virus_epi_fragments:
+			epi_frag_attributes = epi_fragment.get_all_attributes()
+			fragment = tuple([epi_frag_attributes["fragment_id"], epi_frag_attributes["parent_epi_id"],
+					 epi_frag_attributes["fragment_seq"],
+					 epi_frag_attributes["fragment_start"],
+					 epi_frag_attributes["fragment_stop"]])
+			epi_fragments.append(fragment)
+		return epi_fragments
+
 	def virus_epi_fragments2tsv(self):
 		"""
 		Write fragments of discontinuous epitopes for current virus to tsv file
@@ -93,6 +114,31 @@ class IEDBEpitopes:
 					 str(epi_frag_attributes["fragment_stop"])])
 				epitopes_out.write(epi_frag_row + "\n")
 		print("====")
+	def get_virus_epitopes(self):
+		"""
+		Get current virus epitopes in list of tuples
+
+		Returns
+		-------
+		list of tuple
+			all epitopes of virus
+		"""
+		print("Return all epitopes of virus taxid={}".format(self.current_virus_taxon_id))
+		epitopes = []
+		for epi in self.current_virus_epitopes:
+			epi_attributes = epi.get_all_attributes()
+			if epi_attributes["is_linear"]:
+				epi_seq = epi_attributes["region_seq"]
+			else:
+				epi_seq = "Null"
+			epitope = tuple([epi_attributes["epitope_id"], epi_attributes["virus_taxid"], epi_attributes["host_taxid"],
+			 epi_attributes["protein_ncbi_id"], epi_attributes["cell_type"], epi_attributes["hla_restriction"],
+			 epi_attributes["response_frequency"], epi_seq,
+			 epi_attributes["region_start"], epi_attributes["region_stop"],
+			 epi_attributes["is_imported"], ",".join(epi_attributes["external_links"]),
+			 epi_attributes["prediction_process"], epi_attributes["is_linear"]])
+			epitopes.append(epitope)
+		return epitopes
 
 	def virus_epitopes2tsv(self):
 		"""
@@ -237,6 +283,26 @@ class IEDBEpitopes:
 		self.write_ncbi_iedb_discordant_sequences()
 		print("=== ~ ===")
 
+	def process_virus(self,virus_taxid):
+		"""
+		Extract virus epitopes from IEDB
+
+		Parameters
+		----------
+		virus_taxid : int
+		NCBI taxonomy id of virus
+
+		Returns
+		-------
+		None
+		"""
+		print("Process virus with ncbi taxid={}".format(virus_taxid))
+		virus_path = Path(join(self.viruses_path,"taxon_"+str(virus_taxid)))
+		assert isdir(virus_path), "AssertionError: virus folder was not found in viruses_proteins folder"
+		self.subset_iedb_by_host_assay_type()
+		self.subset_Bcells_by_epi_type()
+		self.process_virus_proteins(virus_path)
+
 	def write_ncbi_iedb_discordant_sequences(self):
 		"""
 		Write all epitopes that their NCBI and IEDB sequences do not match
@@ -288,6 +354,7 @@ class IEDBEpitopes:
 		-------
 		None
 		"""
+		print(type(virus_proteins_path))
 		self.current_virus_taxon_id = splitext(virus_proteins_path.name)[0].split("_")[1]
 		print("=== Virus ===")
 		print("Process proteins of virus with taxon id: {}".format(self.current_virus_taxon_id))
@@ -296,8 +363,8 @@ class IEDBEpitopes:
 		self.current_virus_epitopes = []  # clear current virus epitopes
 		self.current_virus_epi_fragments = []  # clear current virus epitope fragments
 		self.ncbi_iedb_not_equal.append("=== Virus taxid={} ===".format(self.current_virus_taxon_id))
-		tcells_current_virus.to_csv(join(self.cell_epitopes_path, "tcell_virus.csv"), index=False)
-		bcells_current_virus.to_csv(join(self.cell_epitopes_path, "bcell_virus.csv"), index=False)
+		# tcells_current_virus.to_csv(join(self.cell_epitopes_path, "tcell_virus.csv"), index=False)
+		# bcells_current_virus.to_csv(join(self.cell_epitopes_path, "bcell_virus.csv"), index=False)
 		self.process_Bcells(bcells_current_virus)
 		self.process_Tcells(tcells_current_virus)
 

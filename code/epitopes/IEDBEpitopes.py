@@ -188,13 +188,15 @@ class IEDBEpitopes:
 		None
 		"""
 		assert isfile(join(self.cell_epitopes_path,
-		                   "tcell_full_v3.csv")), "AssertionError: IEDB Tcell assays csv was not found in {}".format(
+		                   "tcell_full_v3.csv.gz")), "AssertionError: IEDB Tcell assays csv was not found in {}".format(
 			self.cell_epitopes_path)
-		self.tcell_iedb_assays = read_csv(join(self.cell_epitopes_path, "tcell_full_v3.csv"), sep=",", header=1)
+		self.tcell_iedb_assays = read_csv(join(self.cell_epitopes_path, "tcell_full_v3.csv.gz"), sep=",", header=1,
+		                                  compression='gzip')
 		assert isfile(join(self.cell_epitopes_path,
-		                   "bcell_full_v3.csv")), "AssertionError: IEDB Bcell assays csv was not found in {}".format(
+		                   "bcell_full_v3.csv.gz")), "AssertionError: IEDB Bcell assays csv was not found in {}".format(
 			self.cell_epitopes_path)
-		self.bcell_iedb_assays = read_csv(join(self.cell_epitopes_path, "bcell_full_v3.csv"), sep=",", header=1)
+		self.bcell_iedb_assays = read_csv(join(self.cell_epitopes_path, "bcell_full_v3.csv.gz"), sep=",", header=1,
+		                                  compression='gzip')
 
 	def subset_iedb_by_host_assay_type(self):
 		"""
@@ -219,8 +221,6 @@ class IEDBEpitopes:
 		self.bcell_iedb_assays = self.bcell_iedb_assays.loc[self.bcell_iedb_assays["Host IRI"] == host_taxid]
 		print("B cell subset number of non-unique epitopes: {}".format(self.bcell_iedb_assays.shape[0]))
 		print("T cell subset number of non-unique epitopes: {}".format(self.tcell_iedb_assays.shape[0]))
-
-		self.tcell_iedb_assays.to_csv(join(self.cell_epitopes_path, "tcell_positive_host.csv"), index=False)
 
 	def subset_Bcells_by_epi_type(self):
 		"""
@@ -360,7 +360,6 @@ class IEDBEpitopes:
 		-------
 		None
 		"""
-		print(type(virus_proteins_path))
 		self.current_virus_taxon_id = splitext(virus_proteins_path.name)[0].split("_")[1]
 		print("=== Virus ===")
 		print("Process proteins of virus with taxon id: {}".format(self.current_virus_taxon_id))
@@ -369,8 +368,7 @@ class IEDBEpitopes:
 		self.current_virus_epitopes = []  # clear current virus epitopes
 		self.current_virus_epi_fragments = []  # clear current virus epitope fragments
 		self.ncbi_iedb_not_equal.append("=== Virus taxid={} ===".format(self.current_virus_taxon_id))
-		# tcells_current_virus.to_csv(join(self.cell_epitopes_path, "tcell_virus.csv"), index=False)
-		# bcells_current_virus.to_csv(join(self.cell_epitopes_path, "bcell_virus.csv"), index=False)
+
 		self.process_Bcells(bcells_current_virus)
 		self.process_Tcells(tcells_current_virus)
 

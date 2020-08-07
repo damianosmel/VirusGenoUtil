@@ -25,7 +25,6 @@ assay_type = "positive"
 
 # output
 output_path = join(root,"data/iedb_output")
-# create_dir(output_path)
 
 IEDBEpitopes = IEDBEpitopes(data_path, cells_epitopes_folder, virus_proteins_folder,
                             host_taxon, host_name, assay_type, output_path)

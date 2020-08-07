@@ -81,9 +81,9 @@ class IEDBEpitopes:
 		for epi_fragment in self.current_virus_epi_fragments:
 			epi_frag_attributes = epi_fragment.get_all_attributes()
 			fragment = tuple([epi_frag_attributes["fragment_id"], epi_frag_attributes["parent_epi_id"],
-					 epi_frag_attributes["fragment_seq"],
-					 epi_frag_attributes["fragment_start"],
-					 epi_frag_attributes["fragment_stop"]])
+			                  epi_frag_attributes["fragment_seq"],
+			                  epi_frag_attributes["fragment_start"],
+			                  epi_frag_attributes["fragment_stop"]])
 			epi_fragments.append(fragment)
 		return epi_fragments
 
@@ -114,6 +114,7 @@ class IEDBEpitopes:
 					 str(epi_frag_attributes["fragment_stop"])])
 				epitopes_out.write(epi_frag_row + "\n")
 		print("====")
+
 	def get_virus_epitopes(self):
 		"""
 		Get current virus epitopes in list of tuples
@@ -132,11 +133,12 @@ class IEDBEpitopes:
 			else:
 				epi_seq = "Null"
 			epitope = tuple([epi_attributes["epitope_id"], epi_attributes["virus_taxid"], epi_attributes["host_taxid"],
-			 epi_attributes["protein_ncbi_id"], epi_attributes["cell_type"], epi_attributes["hla_restriction"],
-			 epi_attributes["response_frequency"], epi_seq,
-			 epi_attributes["region_start"], epi_attributes["region_stop"],
-			 epi_attributes["is_imported"], ",".join(epi_attributes["external_links"]),
-			 epi_attributes["prediction_process"], epi_attributes["is_linear"]])
+			                 epi_attributes["protein_ncbi_id"], epi_attributes["cell_type"],
+			                 epi_attributes["hla_restriction"],
+			                 epi_attributes["response_frequency"], epi_seq,
+			                 epi_attributes["region_start"], epi_attributes["region_stop"],
+			                 epi_attributes["is_imported"], ",".join(epi_attributes["external_links"]),
+			                 epi_attributes["prediction_process"], epi_attributes["is_linear"]])
 			epitopes.append(epitope)
 		return epitopes
 
@@ -250,13 +252,17 @@ class IEDBEpitopes:
 				-1].str.strip() == self.current_virus_taxon_id]
 		if tcell_iedb_virus.shape[0] == 0:
 			print("2nd attempt: Match with Organism IRI")
-			tcell_iedb_virus = self.tcell_iedb_assays.loc[self.tcell_iedb_assays["Organism IRI"].str.split("NCBITaxon_").str[-1].str.strip() == self.current_virus_taxon_id]
+			tcell_iedb_virus = self.tcell_iedb_assays.loc[
+				self.tcell_iedb_assays["Organism IRI"].str.split("NCBITaxon_").str[
+					-1].str.strip() == self.current_virus_taxon_id]
 		bcell_iedb_virus = self.bcell_iedb_assays.loc[
 			self.bcell_iedb_assays["Parent Species IRI"].str.split("NCBITaxon_").str[
 				-1].str.strip() == self.current_virus_taxon_id]
 		if bcell_iedb_virus.shape[0] == 0:
 			print("2nd attempt: Match with Organism IRI")
-			bcell_iedb_virus = self.bcell_iedb_assays.loc[self.bcell_iedb_assays["Organism IRI"].str.split("NCBITaxon_").str[-1].str.strip() == self.current_virus_taxon_id]
+			bcell_iedb_virus = self.bcell_iedb_assays.loc[
+				self.bcell_iedb_assays["Organism IRI"].str.split("NCBITaxon_").str[
+					-1].str.strip() == self.current_virus_taxon_id]
 		print("B cell subset for virus contains {} non unique epitopes".format(bcell_iedb_virus.shape[0]))
 		print("B cell head: {}".format(bcell_iedb_virus.head()))
 		print("T cell subset for virus contains {} non unique epitopes".format(tcell_iedb_virus.shape[0]))
@@ -283,7 +289,7 @@ class IEDBEpitopes:
 		self.write_ncbi_iedb_discordant_sequences()
 		print("=== ~ ===")
 
-	def process_virus(self,virus_taxid):
+	def process_virus(self, virus_taxid):
 		"""
 		Extract virus epitopes from IEDB
 
@@ -297,7 +303,7 @@ class IEDBEpitopes:
 		None
 		"""
 		print("Process virus with ncbi taxid={}".format(virus_taxid))
-		virus_path = Path(join(self.viruses_path,"taxon_"+str(virus_taxid)))
+		virus_path = Path(join(self.viruses_path, "taxon_" + str(virus_taxid)))
 		assert isdir(virus_path), "AssertionError: virus folder was not found in viruses_proteins folder"
 		self.subset_iedb_by_host_assay_type()
 		self.subset_Bcells_by_epi_type()

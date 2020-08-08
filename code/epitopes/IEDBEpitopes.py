@@ -374,7 +374,8 @@ class IEDBEpitopes:
 		self.current_virus_epitopes = []  # clear current virus epitopes
 		self.current_virus_epi_fragments = []  # clear current virus epitope fragments
 		self.ncbi_iedb_not_equal.append("=== Virus taxid={} ===".format(self.current_virus_taxon_id))
-
+		tcells_current_virus.to_csv(join(self.cell_epitopes_path, "tcell_virus.csv"), index=False)
+		bcells_current_virus.to_csv(join(self.cell_epitopes_path, "bcell_virus.csv"), index=False)
 		self.process_Bcells(bcells_current_virus)
 		self.process_Tcells(tcells_current_virus)
 
@@ -402,9 +403,15 @@ class IEDBEpitopes:
 			if bcells_current_protein.shape[0] == 0:
 				print("Could not match using uniprot")
 				print("2nd attempt: Match with protein name")
+				print(protein.get_name().lower())
 				bcells_current_protein = bcells_current_virus.loc[
 					bcells_current_virus["Parent Protein"].str.split("[").str[
 						0].str.strip().str.lower() == protein.get_name().lower()]
+			if bcells_current_protein.shape[0] == 0:
+				print("Could not match using parent protein name")
+				print("3rd attempt: Match with antigen name")
+				bcells_current_protein = bcells_current_virus.loc[
+					bcells_current_virus["Antigen Name"].str.strip().str.lower() == protein.get_name().lower()]
 			print("Number of non unique epitopes for protein = {}".format(bcells_current_protein.shape[0]))
 
 			if bcells_current_protein.shape[0] == 0:
@@ -691,6 +698,13 @@ class IEDBEpitopes:
 				tcells_current_protein = tcells_current_virus.loc[
 					tcells_current_virus["Parent Protein"].str.split("[").str[
 						0].str.strip().str.lower() == protein.get_name().lower()]
+
+			if tcells_current_protein.shape[0] == 0:
+				print("Could not match using protein name")
+				print("3rd attempt: Match with antigen name")
+				tcells_current_protein = tcells_current_virus.loc[
+					tcells_current_virus["Antigen Name"].str.strip().str.lower()
+					== protein.get_name().lower()]
 			print("Number of non unique epitopes for protein = {}".format(tcells_current_protein.shape[0]))
 
 			if tcells_current_protein.shape[0] == 0:

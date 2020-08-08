@@ -170,6 +170,11 @@ class IEDBEpitopes:
 					epi_seq = epi_attributes["region_seq"]
 				else:
 					epi_seq = None
+				if not epi_seq:
+					epi_seq = ''
+				if not epi_attributes["hla_restriction"]:
+					epi_attributes["hla_restriction"] = ''
+
 				epitope_row = "\t".join(
 					[str(epi_attributes["epitope_id"]), epi_attributes["virus_taxid"], epi_attributes["host_taxid"],
 					 epi_attributes["protein_ncbi_id"], epi_attributes["cell_type"], epi_attributes["hla_restriction"],

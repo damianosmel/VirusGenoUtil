@@ -18,7 +18,7 @@ host_taxon, host_name = "taxon_9606", "Homo Sapiens"
 assay_type = "positive"
 
 # output
-output_path = "/home/damian/Documents/L3S/projects/sars_cov2/IEDB_epitopes"
+output_path = "/home/damian/Documents/L3S/projects/sars_cov2/IEDB_epitopes_all_ViruSurf"
 create_dir(output_path)
 
 IEDBEpitopes = IEDBEpitopes(data_path, cells_epitopes_folder, virus_proteins_folder,

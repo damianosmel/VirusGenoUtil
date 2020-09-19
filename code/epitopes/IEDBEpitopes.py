@@ -158,7 +158,7 @@ class IEDBEpitopes:
 			print("Create file: {}".format(epitopes_name))
 			with open(join(self.output_path, epitopes_name), "w") as epitopes_out:
 				epitopes_out.write(
-					"epitope_id\tvirus_taxid\thost_taxid\tprotein_ncbi_id\tcell_type\thla_restriction\tresponse_frequency\tepitope_sequence\tepitope_start\tepitope_stop\tis_imported\texternal_links\tprediction_process\tis_linear\n")
+					"epitope_id\tvirus_taxid\thost_taxid\tprotein_ncbi_id\tcell_type\thla_restriction\tresponse_frequency\tepitope_sequence\tepitope_start\tepitope_stop\texternal_links\tprediction_process\tis_linear\n")
 
 		with open(join(self.output_path, epitopes_name), "a") as epitopes_out:
 			print("Update file: {}".format(epitopes_name))
@@ -180,7 +180,7 @@ class IEDBEpitopes:
 					 epi_attributes["protein_ncbi_id"], epi_attributes["cell_type"], epi_attributes["hla_restriction"],
 					 str(epi_attributes["response_frequency"]), epi_seq,
 					 str(epi_attributes["region_start"]), str(epi_attributes["region_stop"]),
-					 str(epi_attributes["is_imported"]), ",".join(epi_attributes["external_links"]),
+					",".join(epi_attributes["external_links"]),
 					 str(epi_attributes["prediction_process"]), str(epi_attributes["is_linear"])])
 				epitopes_out.write(epitope_row + "\n")
 		print("====")
@@ -203,6 +203,9 @@ class IEDBEpitopes:
 			self.cell_epitopes_path)
 		self.bcell_iedb_assays = read_csv(join(self.cell_epitopes_path, "bcell_full_v3.csv.gz"), sep=",", header=1,
 		                                  compression='gzip')
+		print("B cell subset number of non-unique epitopes: {}".format(self.bcell_iedb_assays.shape[0]))
+		print("T cell subset number of non-unique epitopes: {}".format(self.tcell_iedb_assays.shape[0]))
+		print("---")
 
 	def subset_iedb_by_host_assay_type(self):
 		"""
@@ -220,11 +223,16 @@ class IEDBEpitopes:
 
 			self.bcell_iedb_assays = self.bcell_iedb_assays.loc[
 				self.bcell_iedb_assays["Qualitative Measure"].str.contains(self.assay_type, case=False)]
+		else:
+			print("Select all assay type: positive and negative")
+		if self.host_taxon_id != "all":
+			print("Select epitopes experimental identified in host id: {} = {}".format(self.host_taxon_id, self.host_name))
+			host_taxid = self.url_prefixes["taxid"] + self.host_taxon_id
+			self.tcell_iedb_assays = self.tcell_iedb_assays.loc[self.tcell_iedb_assays["Host IRI"] == host_taxid]
+			self.bcell_iedb_assays = self.bcell_iedb_assays.loc[self.bcell_iedb_assays["Host IRI"] == host_taxid]
+		else:
+			print("Select all available hosts")
 
-		print("Select epitopes experimental identified in host id: {} = {}".format(self.host_taxon_id, self.host_name))
-		host_taxid = self.url_prefixes["taxid"] + self.host_taxon_id
-		self.tcell_iedb_assays = self.tcell_iedb_assays.loc[self.tcell_iedb_assays["Host IRI"] == host_taxid]
-		self.bcell_iedb_assays = self.bcell_iedb_assays.loc[self.bcell_iedb_assays["Host IRI"] == host_taxid]
 		print("B cell subset number of non-unique epitopes: {}".format(self.bcell_iedb_assays.shape[0]))
 		print("T cell subset number of non-unique epitopes: {}".format(self.tcell_iedb_assays.shape[0]))
 
@@ -429,7 +437,6 @@ class IEDBEpitopes:
 
 				# create an Epitope object for each identified IEDB epitope
 				host_taxon_id = self.host_taxon_id
-				is_imported = True
 				prediction_process = "IEDB_import"
 				# get protein record
 				protein_record = protein.get_record()
@@ -439,9 +446,9 @@ class IEDBEpitopes:
 						reg_start, reg_end = self.get_discontinous_epi_start_stop(normalized)
 					else:  # linear epitope
 						is_linear = True
+						reg_start, reg_end = region[0], region[-1]
 						# decrease by one the region start to convert 1-index to 0-index
-						reg_start, reg_end = region[0] - 1, region[-1]
-						ncbi_prot_epi = protein_record.seq[reg_start:reg_end]
+						ncbi_prot_epi = protein_record.seq[region[0] - 1 : region[-1]]
 
 						if ncbi_prot_epi != normalized:  # append discordant epitopes
 							self.ncbi_iedb_not_equal.append(
@@ -450,12 +457,12 @@ class IEDBEpitopes:
 									                                                              normalized2external_links[
 										                                                              normalized])))
 					external_links = normalized2external_links[normalized]
-					if normalized2rf_score[
-						normalized] > -1:  # if tested subjects information is given, export epitope
-						epitope = Epitope(self.current_virus_taxon_id, protein.get_ncbi_id(), host_taxon_id, "B cell",
+
+					# create epitope even does not contain RF information
+					epitope = Epitope(self.current_virus_taxon_id, protein.get_ncbi_id(), host_taxon_id, "B cell",
 						                  normalized2allele[normalized], normalized2rf_score[normalized],
 						                  str(normalized), reg_start,
-						                  reg_end, is_imported, external_links, prediction_process, is_linear)
+						                  reg_end, external_links, prediction_process, is_linear)
 					self.current_virus_epitopes.append(epitope)
 					if not is_linear:
 						self.current_virus_epi_fragments = self.current_virus_epi_fragments + epitope.get_fragments()
@@ -650,16 +657,19 @@ class IEDBEpitopes:
 		for normalized, unique in normalized2unique.items():
 			# sum r and t for all assays testing the current epitope
 			t, r = 0.0, 0.0
-			for _, row in idbe_assay.loc[idbe_assay["Description"] == unique, ["Number of Subjects Tested",
+			for _, row in idbe_assay.loc[idbe_assay["Description"] == unique, ["Qualitative Measure", "Number of Subjects Tested",
 			                                                                   "Number of Subjects Responded"]].iterrows():
-				if isnan(row["Number of Subjects Tested"]):
-					t = t + 1.0
-				else:
-					t = t + row["Number of Subjects Tested"]
-				if isnan(row["Number of Subjects Responded"]):
-					r = r + 1.0
-				else:
-					r = r + row["Number of Subjects Responded"]
+				if row["Qualitative Measure"] == "Negative":
+					t == 0
+				else:  # positive assays
+					if isnan(row["Number of Subjects Tested"]):
+						t = t + 1.0
+					else:
+						t = t + row["Number of Subjects Tested"]
+					if isnan(row["Number of Subjects Responded"]):
+						r = r + 1.0
+					else:
+						r = r + row["Number of Subjects Responded"]
 			if t == 0:  # no information of tested subjects from all occurences of the epitope, assign -1
 				rf_score = -1.0
 			else:
@@ -722,29 +732,27 @@ class IEDBEpitopes:
 
 				# create an Epitope object for each identified IEDB epitope
 				host_taxon_id = self.host_taxon_id
-				is_imported = True
 				prediction_process = "IEDB_import"
 				is_linear = True  # default for T cells
 				# get protein record
 				protein_record = protein.get_record()
 				for normalized, region in normalized2regions.items():
 					external_links = normalized2external_links[normalized]
+					reg_start, reg_end = region[0], region[-1]
 					# decrease by one the region start to convert 1-index to 0-index
-					reg_start, reg_end = region[0] - 1, region[-1]
-					ncbi_prot_epi = protein_record.seq[reg_start:reg_end]
+					ncbi_prot_epi = protein_record.seq[region[0]-1:region[-1]]
 					if ncbi_prot_epi != normalized:  # append discordant epitopes
 						self.ncbi_iedb_not_equal.append(
 							"iedb frag:{}, ncbi prot:{}, iedb epitope link(s): {}".format(normalized, ncbi_prot_epi,
 							                                                              " ".join(external_links)))
-					if normalized2rf_score[
-						normalized] > -1:  # if tested subjects information is given, export epitope
-						epitope = Epitope(self.current_virus_taxon_id, protein.get_ncbi_id(), host_taxon_id, "T cell",
+
+					# create epitope object even if RF information is not given
+					epitope = Epitope(self.current_virus_taxon_id, protein.get_ncbi_id(), host_taxon_id, "T cell",
 						                  normalized2allele[normalized], normalized2rf_score[normalized],
 						                  str(normalized),
 						                  reg_start, reg_end,
-						                  is_imported,
 						                  external_links, prediction_process, is_linear)
-						self.current_virus_epitopes.append(epitope)
+					self.current_virus_epitopes.append(epitope)
 				all_attributes = self.current_virus_epitopes[-1].get_all_attributes()
 				print(all_attributes)
 		print("====")

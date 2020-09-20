@@ -54,6 +54,7 @@ class IEDBEpitopes:
 		self.tcell_iedb_assays, self.bcell_iedb_assays = None, None
 		self.host_taxon_id = host_taxon_id.split("_")[1]
 		self.host_name = str(host_name)
+		self.hosts_info = {}  # keep all host information in a dictionary: {host_id: host name, ..,}
 		self.assay_type = assay_type
 		self.url_prefixes = {"taxid": "http://purl.obolibrary.org/obo/NCBITaxon_",
 		                     "uniprot": "http://www.uniprot.org/uniprot/"}
@@ -158,7 +159,7 @@ class IEDBEpitopes:
 			print("Create file: {}".format(epitopes_name))
 			with open(join(self.output_path, epitopes_name), "w") as epitopes_out:
 				epitopes_out.write(
-					"epitope_id\tvirus_taxid\thost_taxid\tprotein_ncbi_id\tcell_type\tmhc_class\tmhc_restriction\tresponse_frequency_pos\tfound_in_pos_assay\tfound_in_neg_assay\tepitope_sequence\tepitope_start\tepitope_stop\texternal_links\tprediction_process\tis_linear\n")
+					"epitope_id\tvirus_taxid\thost_taxid\thost_name\tprotein_ncbi_id\tcell_type\tmhc_class\tmhc_restriction\tresponse_frequency_pos\tfound_in_pos_assay\tfound_in_neg_assay\tepitope_sequence\tepitope_start\tepitope_stop\texternal_links\tprediction_process\tis_linear\n")
 
 		with open(join(self.output_path, epitopes_name), "a") as epitopes_out:
 			print("Update file: {}".format(epitopes_name))
@@ -179,8 +180,8 @@ class IEDBEpitopes:
 
 				epitope_row = "\t".join(
 					[str(epi_attributes["epitope_id"]), epi_attributes["virus_taxid"], epi_attributes["host_taxid"],
-					 epi_attributes["protein_ncbi_id"], epi_attributes["cell_type"], epi_attributes["mhc_class"],
-					 epi_attributes["mhc_allele"],
+					 epi_attributes['host_name'], epi_attributes["protein_ncbi_id"], epi_attributes["cell_type"],
+					 epi_attributes["mhc_class"], epi_attributes["mhc_allele"],
 					 str(epi_attributes["response_frequency_positive"]),
 					 str(epi_attributes["found_in_positive_assays"]),
 					 str(epi_attributes["found_in_negative_assays"]), epi_seq,
@@ -211,6 +212,24 @@ class IEDBEpitopes:
 		print("B cell subset number of non-unique epitopes: {}".format(self.bcell_iedb_assays.shape[0]))
 		print("T cell subset number of non-unique epitopes: {}".format(self.tcell_iedb_assays.shape[0]))
 		print("---")
+
+	def subset_iedb_by_host_iri(self, iedb_assay, host_iri):
+		"""
+		Subset IEBD assay dataframe by host IRI
+
+		Parameters
+		----------
+		iedb_assay : Pandas.DataFrame
+			iedb assay data
+		host_iri : str
+			host IRI used to subset the iedb data
+		Returns
+		-------
+		Pandas.DataFrame
+			subset of IEDB assay
+		"""
+		print("Select epitopes found only for host iri:{}".format(host_iri))
+		return iedb_assay.loc[iedb_assay["Host IRI"] == host_iri]
 
 	def subset_iedb_by_host_assay_type(self):
 		"""
@@ -300,6 +319,11 @@ class IEDBEpitopes:
 		print("Process all viruses found in {}".format(self.viruses_path))
 		self.subset_iedb_by_host_assay_type()
 		self.subset_Bcells_by_epi_type()
+		if self.host_taxon_id == "all":
+			all_host_info_tcells = self.extract_host_info(self.tcell_iedb_assays)
+			all_host_info_bcells = self.extract_host_info(self.bcell_iedb_assays)
+			self.hosts_info = {**all_host_info_tcells, **all_host_info_bcells}
+
 		with scandir(self.viruses_path) as viruses_dir:
 			for content in viruses_dir:
 				if content.is_dir() and "taxon_" in content.name:
@@ -367,6 +391,53 @@ class IEDBEpitopes:
 						self.current_virus_proteins[protein_id] = protein
 		print("====")
 
+	# TODO: function to make ncbi taxon -> ncbi id, ONTIE id -> ncbi id
+	def normalize_host_ids(self):
+		# host_id = host_iri.split("/")[-1]
+		pass
+
+	def find_unique_host_iris(self, iedb_assay):
+		"""
+		Find all unique host IRIs from the input data frame
+
+		Parameters
+		----------
+		iedb_assay: Pandas.DataFrame
+			dataframe to extract all unique host taxon id
+
+		Returns
+		-------
+		list of str
+			list of all unique host IRIs
+		"""
+		all_unique_host_iris = []
+		for host_iri in unique(iedb_assay["Host IRI"]):
+			all_unique_host_iris.append(host_iri)
+		return all_unique_host_iris
+
+	def extract_host_info(self, iedb_assay):
+		"""
+		Extract host information (IRI, name)
+
+		Parameters
+		----------
+		iedb_assay : Pandas.DataFrame
+			dataframe to extract host information from
+
+		Returns
+		-------
+		dict of str: str
+			host information
+		"""
+		host_info = {}
+		for host_iri in unique(iedb_assay["Host IRI"]):
+			host_names = unique(iedb_assay['Name'].loc[iedb_assay['Host IRI'] == host_iri])
+			if len(host_names) == 0:
+				host_info[host_iri] = "unknown"
+			else:
+				host_info[host_iri] = host_names[0]
+		return host_info
+
 	def process_virus_proteins(self, virus_proteins_path):
 		"""
 		Process information for IEDB epitopes for each protein of the virus
@@ -390,8 +461,20 @@ class IEDBEpitopes:
 		self.ncbi_iedb_not_equal.append("=== Virus taxid={} ===".format(self.current_virus_taxon_id))
 		bcells_current_virus.to_csv(join(self.output_path, "bcells_virus_" + self.current_virus_taxon_id + ".csv"))
 		tcells_current_virus.to_csv(join(self.output_path, "tcells_virus_" + self.current_virus_taxon_id + ".csv"))
-		self.process_Bcells(bcells_current_virus)
-		self.process_Tcells(tcells_current_virus)
+
+		if self.host_taxon_id == "all":
+			available_hosts_bcells = self.find_unique_host_iris(bcells_current_virus)
+			available_hosts_tcells = self.find_unique_host_iris(tcells_current_virus)
+			for unique_host_iri in list(self.hosts_info.keys()):
+				if unique_host_iri in available_hosts_bcells:
+					bcells_current_virus_host = self.subset_iedb_by_host_iri(bcells_current_virus, unique_host_iri)
+					self.process_Bcells(bcells_current_virus_host)
+				if unique_host_iri in available_hosts_tcells:
+					tcells_current_virus_host = self.subset_iedb_by_host_iri(tcells_current_virus, unique_host_iri)
+					self.process_Tcells(tcells_current_virus_host)
+		else:  # for only one host id the assay is already subset
+			self.process_Bcells(bcells_current_virus)
+			self.process_Tcells(tcells_current_virus)
 
 	def process_Bcells(self, bcells_current_virus):
 		"""
@@ -441,7 +524,9 @@ class IEDBEpitopes:
 				normalized2rf_info = self.calculate_RF_info(bcells_current_protein, normalized2unique)
 				# extract external links per unique epitope
 				normalized2external_links = self.find_epitope_external_links(bcells_current_protein, normalized2unique)
-
+				# get current host IRI
+				current_host_iri = unique(bcells_current_protein["Host IRI"])[0]
+				# current_host_id self.normalize_host_ids(current_host_iri) #TODO
 				# create an Epitope object for each identified IEDB epitope
 				host_taxon_id = self.host_taxon_id
 				prediction_process = "IEDB_import"
@@ -464,8 +549,8 @@ class IEDBEpitopes:
 									                                                              normalized2external_links[
 										                                                              normalized])))
 					external_links = normalized2external_links[normalized]
-
-					epitope = Epitope(self.current_virus_taxon_id, protein.get_ncbi_id(), host_taxon_id, "B cell",
+					epitope = Epitope(self.current_virus_taxon_id, protein.get_ncbi_id(), current_host_iri,
+					                  self.hosts_info[current_host_iri], "B cell",
 					                  normalized2allele[normalized], normalized2rf_info[normalized],
 					                  str(normalized),
 					                  reg_start, reg_end,
@@ -760,7 +845,9 @@ class IEDBEpitopes:
 				normalized2rf_info = self.calculate_RF_info(tcells_current_protein, normalized2unique)
 				# extract external links per unique epitope
 				normalized2external_links = self.find_epitope_external_links(tcells_current_protein, normalized2unique)
-
+				# get current host IRI
+				current_host_id = unique(tcells_current_protein["Host IRI"])[0]
+				# current_host_id self.normalize_host_ids(current_host_iri) #TODO
 				# create an Epitope object for each identified IEDB epitope
 				host_taxon_id = self.host_taxon_id
 				prediction_process = "IEDB_import"
@@ -778,7 +865,8 @@ class IEDBEpitopes:
 							                                                              " ".join(external_links)))
 
 					# create epitope object for the two possible types of assay, if are found in the data
-					epitope = Epitope(self.current_virus_taxon_id, protein.get_ncbi_id(), host_taxon_id, "T cell",
+					epitope = Epitope(self.current_virus_taxon_id, protein.get_ncbi_id(), current_host_id,
+					                  self.hosts_info[current_host_id], "T cell",
 					                  normalized2allele[normalized], normalized2rf_info[normalized],
 					                  str(normalized),
 					                  reg_start, reg_end,

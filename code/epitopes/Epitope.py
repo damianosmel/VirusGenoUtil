@@ -9,7 +9,8 @@ class Epitope:
 	# credits: https://stackoverflow.com/questions/1045344/how-do-you-create-an-incremental-id-in-a-python-class/54318273#54318273
 	new_id = itertools.count()
 
-	def __init__(self, virus_taxid, protein_ncbi_id, host_taxid, cell_type, mhc_restriction, response_frequency_info,
+	def __init__(self, virus_taxid, protein_ncbi_id, host_taxid, host_name, cell_type, mhc_restriction,
+	             response_frequency_info,
 	             region_seq, region_start, region_stop, external_links, prediction_process, is_linear):
 		"""
 		Epitope construstor
@@ -21,7 +22,9 @@ class Epitope:
 		protein_ncbi_id : str
 			protein (antigen) NCBI id
 		host_taxid : str
-			host NCBI taxonomy
+			host taxon id
+		host_name : str
+			host name
 		cell_type : str
 			cell type
 		mhc_restriction : str
@@ -45,6 +48,7 @@ class Epitope:
 		self.virus_taxid = virus_taxid
 		self.protein_ncbi_id = protein_ncbi_id
 		self.host_taxid = host_taxid
+		self.host_name = host_name
 		self.cell_type = cell_type
 		self.mhc_class = mhc_restriction['class']
 		self.mhc_allele = mhc_restriction['allele']
@@ -126,6 +130,7 @@ class Epitope:
 		        "virus_taxid": self.virus_taxid,
 		        "protein_ncbi_id": self.protein_ncbi_id,
 		        "host_taxid": self.host_taxid,
+		        "host_name": self.host_name,
 		        "cell_type": self.cell_type,
 		        "mhc_class": self.mhc_class,
 		        "mhc_allele": self.mhc_allele,

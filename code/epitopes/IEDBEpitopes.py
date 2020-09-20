@@ -158,7 +158,7 @@ class IEDBEpitopes:
 			print("Create file: {}".format(epitopes_name))
 			with open(join(self.output_path, epitopes_name), "w") as epitopes_out:
 				epitopes_out.write(
-					"epitope_id\tvirus_taxid\thost_taxid\tprotein_ncbi_id\tcell_type\thla_restriction\tresponse_frequency_pos\tfound_in_pos_assay\tfound_in_neg_assay\tepitope_sequence\tepitope_start\tepitope_stop\texternal_links\tprediction_process\tis_linear\n")
+					"epitope_id\tvirus_taxid\thost_taxid\tprotein_ncbi_id\tcell_type\tmhc_class\tmhc_restriction\tresponse_frequency_pos\tfound_in_pos_assay\tfound_in_neg_assay\tepitope_sequence\tepitope_start\tepitope_stop\texternal_links\tprediction_process\tis_linear\n")
 
 		with open(join(self.output_path, epitopes_name), "a") as epitopes_out:
 			print("Update file: {}".format(epitopes_name))
@@ -172,12 +172,15 @@ class IEDBEpitopes:
 					epi_seq = None
 				if not epi_seq:
 					epi_seq = ''
-				if not epi_attributes["hla_restriction"]:
-					epi_attributes["hla_restriction"] = ''
+				if not epi_attributes["mhc_class"]:
+					epi_attributes["mhc_class"] = ''
+				if not epi_attributes["mhc_allele"]:
+					epi_attributes["mhc_allele"] = ''
 
 				epitope_row = "\t".join(
 					[str(epi_attributes["epitope_id"]), epi_attributes["virus_taxid"], epi_attributes["host_taxid"],
-					 epi_attributes["protein_ncbi_id"], epi_attributes["cell_type"], epi_attributes["hla_restriction"],
+					 epi_attributes["protein_ncbi_id"], epi_attributes["cell_type"], epi_attributes["mhc_class"],
+					 epi_attributes["mhc_allele"],
 					 str(epi_attributes["response_frequency_positive"]),
 					 str(epi_attributes["found_in_positive_assays"]),
 					 str(epi_attributes["found_in_negative_assays"]), epi_seq,
@@ -431,7 +434,7 @@ class IEDBEpitopes:
 				# normalize epitopes
 				normalized2unique = self.normalize_unique_epitope_sequences(bcells_current_protein)
 				# map epitope to allele
-				normalized2allele = self.map_epitope2allele(bcells_current_protein, normalized2unique, False)
+				normalized2allele = self.map_epitope2MCH_info(bcells_current_protein, normalized2unique, False)
 				# find epitope regions
 				epi_regions, normalized2regions = self.find_epitope_regions(bcells_current_protein, normalized2unique)
 				# calculate RF score
@@ -470,17 +473,6 @@ class IEDBEpitopes:
 					self.current_virus_epitopes.append(epitope)
 					if not is_linear:
 						self.current_virus_epi_fragments = self.current_virus_epi_fragments + epitope.get_fragments()
-				# if normalized2rf_info[normalized]['negative']['exists_neg_assay']:
-				# 	rf_info = {'rf_score': normalized2rf_info[normalized]['negative']['rf_score'],
-				# 	           'is_positive': False}
-				# 	epitope = Epitope(self.current_virus_taxon_id, protein.get_ncbi_id(), host_taxon_id, "T cell",
-				# 	                  normalized2allele[normalized], rf_info,
-				# 	                  str(normalized),
-				# 	                  reg_start, reg_end,
-				# 	                  external_links, prediction_process, is_linear)
-				# 	self.current_virus_epitopes.append(epitope)
-				# 	if not is_linear:
-				# 		self.current_virus_epi_fragments = self.current_virus_epi_fragments + epitope.get_fragments()
 				# print inspection: for each protein print last epitope
 				all_attributes = self.current_virus_epitopes[-1].get_all_attributes()
 				print(all_attributes)
@@ -547,9 +539,9 @@ class IEDBEpitopes:
 			normalized2unique[normalized] = uniq_epi
 		return normalized2unique
 
-	def map_epitope2allele(self, iedb_assay, normalized2unique, is_tcell):
+	def map_epitope2MCH_info(self, iedb_assay, normalized2unique, is_tcell):
 		"""
-		Map epitopes to allele information
+		Map epitopes to allele information (MHC class and allele name)
 
 		Parameters
 		----------
@@ -562,32 +554,39 @@ class IEDBEpitopes:
 
 		Returns
 		-------
-		dict of str : str
+		dict of str: dict of str : str
 			dictionary mapping normalzed epitopes to their allele info
+			example: {.."MNTP..FGRQW":{'MHC_class':'I','MHC_allele':'H2-Kd'} ..}
 		"""
 		print("Map unique epitope sequence to allele information")
-		normalized2allele = {}
+		normalized2mhc = {}
 		# for each pair normalized,unique find the allele information based on the unique allele
 		# then save it for the corresponding normalized epitope
 		for normalized_epi, uniq_epi in normalized2unique.items():
 			if is_tcell:
-				if uniq_epi not in normalized2allele:
-					all_allele_names = []
-					for _, row in iedb_assay.loc[iedb_assay["Description"] == uniq_epi, ["Allele Name"]].iterrows():
-						allele = str(row["Allele Name"])
-						if "HLA" not in allele:
-							allele = "unknown"
-						else:
-							allele = allele.replace(" ", "_")
-						if allele not in all_allele_names:
-							all_allele_names.append(allele)
-
-					if "unknown" in all_allele_names and len(all_allele_names) > 1:
-						all_allele_names.remove("unknown")
-					normalized2allele[normalized_epi] = ",".join(all_allele_names)
+				if uniq_epi not in normalized2mhc:
+					all_mhc_allele_names = []
+					all_mhc_classes = []
+					for _, row in iedb_assay.loc[
+						iedb_assay["Description"] == uniq_epi, ["Allele Name", "Class"]].iterrows():
+						mhc_class = str(row["Class"])
+						mhc_allele = str(row["Allele Name"])
+						if mhc_allele != 'nan':
+							if mhc_allele.replace(" ", "_") not in all_mhc_allele_names:
+								all_mhc_allele_names.append(mhc_allele.replace(" ", "_"))
+						if mhc_class != 'nan' and mhc_class not in all_mhc_classes:
+							all_mhc_classes.append(mhc_class)
+					# after loop, add default values for class and allele
+					normalized2mhc[normalized_epi] = {"class": "unknown", "allele": "unknown"}
+					# update defaults, if information is present
+					if len(all_mhc_classes) > 0:
+						normalized2mhc[normalized_epi]["class"] = ",".join(all_mhc_classes)
+					if len(all_mhc_allele_names) > 0:
+						normalized2mhc[normalized_epi]["allele"] = ",".join(all_mhc_allele_names)
 			else:
-				normalized2allele[normalized_epi] = None
-		return normalized2allele
+				normalized2mhc[normalized_epi] = {"class": None, "allele": None}
+
+		return normalized2mhc
 
 	def find_epitope_regions(self, iedb_assay, normalized2unique):
 		"""
@@ -754,7 +753,7 @@ class IEDBEpitopes:
 				# normalized epitopes
 				normalized2unique = self.normalize_unique_epitope_sequences(tcells_current_protein)
 				# map epitope to allele
-				normalized2allele = self.map_epitope2allele(tcells_current_protein, normalized2unique, True)
+				normalized2allele = self.map_epitope2MCH_info(tcells_current_protein, normalized2unique, True)
 				# find epitope regions
 				epi_regions, normalized2regions = self.find_epitope_regions(tcells_current_protein, normalized2unique)
 				# calculate RF info
@@ -779,23 +778,12 @@ class IEDBEpitopes:
 							                                                              " ".join(external_links)))
 
 					# create epitope object for the two possible types of assay, if are found in the data
-					# if normalized2rf_info[normalized]['positive']['exists_pos_assay']:
-					# 	rf_info = {'rf_score': normalized2rf_info[normalized]['positive']['rf_score'],'is_positive': True}
 					epitope = Epitope(self.current_virus_taxon_id, protein.get_ncbi_id(), host_taxon_id, "T cell",
 					                  normalized2allele[normalized], normalized2rf_info[normalized],
 					                  str(normalized),
 					                  reg_start, reg_end,
 					                  external_links, prediction_process, is_linear)
 					self.current_virus_epitopes.append(epitope)
-				# if normalized2rf_info[normalized]['negative']['exists_neg_assay']:
-				# 	rf_info = {'rf_score': normalized2rf_info[normalized]['negative']['rf_score'],
-				# 	           'is_positive': False}
-				# 	epitope = Epitope(self.current_virus_taxon_id, protein.get_ncbi_id(), host_taxon_id, "T cell",
-				# 	                  normalized2allele[normalized], rf_info,
-				# 	                  str(normalized),
-				# 	                  reg_start, reg_end,
-				# 	                  external_links, prediction_process, is_linear)
-				# 	self.current_virus_epitopes.append(epitope)
 				all_attributes = self.current_virus_epitopes[-1].get_all_attributes()
 				print(all_attributes)
 		print("====")

@@ -9,7 +9,7 @@ class Epitope:
 	# credits: https://stackoverflow.com/questions/1045344/how-do-you-create-an-incremental-id-in-a-python-class/54318273#54318273
 	new_id = itertools.count()
 
-	def __init__(self, virus_taxid, protein_ncbi_id, host_taxid, cell_type, hla_restriction, response_frequency_info,
+	def __init__(self, virus_taxid, protein_ncbi_id, host_taxid, cell_type, mhc_restriction, response_frequency_info,
 	             region_seq, region_start, region_stop, external_links, prediction_process, is_linear):
 		"""
 		Epitope construstor
@@ -24,8 +24,8 @@ class Epitope:
 			host NCBI taxonomy
 		cell_type : str
 			cell type
-		hla_restriction : str
-			HLA restriction (for T-cells)
+		mhc_restriction : str
+			MHC restriction info (for T-cells)
 		response_frequency_info : dict of str : str, float
 			response frequency of epitope and if it was identified by a positive or negative assay
 		region_seq : str
@@ -46,10 +46,8 @@ class Epitope:
 		self.protein_ncbi_id = protein_ncbi_id
 		self.host_taxid = host_taxid
 		self.cell_type = cell_type
-		if cell_type == "B cell":
-			self.hla_restriction = None
-		else:
-			self.hla_restriction = hla_restriction
+		self.mhc_class = mhc_restriction['class']
+		self.mhc_allele = mhc_restriction['allele']
 		if response_frequency_info["positive"]["rf_score"] == -1:
 			self.response_frequency_positive = None
 		else:
@@ -129,7 +127,8 @@ class Epitope:
 		        "protein_ncbi_id": self.protein_ncbi_id,
 		        "host_taxid": self.host_taxid,
 		        "cell_type": self.cell_type,
-		        "hla_restriction": self.hla_restriction,
+		        "mhc_class": self.mhc_class,
+		        "mhc_allele": self.mhc_allele,
 		        "response_frequency_positive": self.response_frequency_positive,
 		        "found_in_positive_assays": self.found_in_positive_assays,
 		        "found_in_negative_assays": self.found_in_negative_assays,

@@ -9,7 +9,7 @@ class Epitope:
 	# credits: https://stackoverflow.com/questions/1045344/how-do-you-create-an-incremental-id-in-a-python-class/54318273#54318273
 	new_id = itertools.count()
 
-	def __init__(self, virus_taxid, protein_ncbi_id, host_taxid, cell_type, hla_restriction, response_frequency,
+	def __init__(self, virus_taxid, protein_ncbi_id, host_taxid, cell_type, hla_restriction, response_frequency_info,
 	             region_seq, region_start, region_stop, external_links, prediction_process, is_linear):
 		"""
 		Epitope construstor
@@ -26,8 +26,8 @@ class Epitope:
 			cell type
 		hla_restriction : str
 			HLA restriction (for T-cells)
-		response_frequency : float
-			response frequency of epitope
+		response_frequency_info : dict of str : str, float
+			response frequency of epitope and if it was identified by a positive or negative assay
 		region_seq : str
 			epitope region sequence
 		region_start : int
@@ -50,10 +50,12 @@ class Epitope:
 			self.hla_restriction = None
 		else:
 			self.hla_restriction = hla_restriction
-		if response_frequency == -1:
-			self.response_frequency = None
+		if response_frequency_info["positive"]["rf_score"] == -1:
+			self.response_frequency_positive = None
 		else:
-			self.response_frequency = str(response_frequency)
+			self.response_frequency_positive = str(response_frequency_info["positive"]["rf_score"])
+		self.found_in_positive_assays = response_frequency_info["positive"]["exists_pos_assay"]
+		self.found_in_negative_assays = response_frequency_info["negative"]["exists_neg_assay"]
 		self.seq = region_seq
 		self.region_start = region_start
 		self.region_stop = region_stop
@@ -128,7 +130,9 @@ class Epitope:
 		        "host_taxid": self.host_taxid,
 		        "cell_type": self.cell_type,
 		        "hla_restriction": self.hla_restriction,
-		        "response_frequency": self.response_frequency,
+		        "response_frequency_positive": self.response_frequency_positive,
+		        "found_in_positive_assays": self.found_in_positive_assays,
+		        "found_in_negative_assays": self.found_in_negative_assays,
 		        "region_seq": self.seq,
 		        "region_start": self.region_start,
 		        "region_stop": self.region_stop,

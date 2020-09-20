@@ -158,7 +158,7 @@ class IEDBEpitopes:
 			print("Create file: {}".format(epitopes_name))
 			with open(join(self.output_path, epitopes_name), "w") as epitopes_out:
 				epitopes_out.write(
-					"epitope_id\tvirus_taxid\thost_taxid\tprotein_ncbi_id\tcell_type\thla_restriction\tresponse_frequency\tepitope_sequence\tepitope_start\tepitope_stop\texternal_links\tprediction_process\tis_linear\n")
+					"epitope_id\tvirus_taxid\thost_taxid\tprotein_ncbi_id\tcell_type\thla_restriction\tresponse_frequency_pos\tfound_in_pos_assay\tfound_in_neg_assay\tepitope_sequence\tepitope_start\tepitope_stop\texternal_links\tprediction_process\tis_linear\n")
 
 		with open(join(self.output_path, epitopes_name), "a") as epitopes_out:
 			print("Update file: {}".format(epitopes_name))
@@ -178,9 +178,11 @@ class IEDBEpitopes:
 				epitope_row = "\t".join(
 					[str(epi_attributes["epitope_id"]), epi_attributes["virus_taxid"], epi_attributes["host_taxid"],
 					 epi_attributes["protein_ncbi_id"], epi_attributes["cell_type"], epi_attributes["hla_restriction"],
-					 str(epi_attributes["response_frequency"]), epi_seq,
+					 str(epi_attributes["response_frequency_positive"]),
+					 str(epi_attributes["found_in_positive_assays"]),
+					 str(epi_attributes["found_in_negative_assays"]), epi_seq,
 					 str(epi_attributes["region_start"]), str(epi_attributes["region_stop"]),
-					",".join(epi_attributes["external_links"]),
+					 ",".join(epi_attributes["external_links"]),
 					 str(epi_attributes["prediction_process"]), str(epi_attributes["is_linear"])])
 				epitopes_out.write(epitope_row + "\n")
 		print("====")
@@ -226,7 +228,8 @@ class IEDBEpitopes:
 		else:
 			print("Select all assay type: positive and negative")
 		if self.host_taxon_id != "all":
-			print("Select epitopes experimental identified in host id: {} = {}".format(self.host_taxon_id, self.host_name))
+			print("Select epitopes experimental identified in host id: {} = {}".format(self.host_taxon_id,
+			                                                                           self.host_name))
 			host_taxid = self.url_prefixes["taxid"] + self.host_taxon_id
 			self.tcell_iedb_assays = self.tcell_iedb_assays.loc[self.tcell_iedb_assays["Host IRI"] == host_taxid]
 			self.bcell_iedb_assays = self.bcell_iedb_assays.loc[self.bcell_iedb_assays["Host IRI"] == host_taxid]
@@ -382,7 +385,8 @@ class IEDBEpitopes:
 		self.current_virus_epitopes = []  # clear current virus epitopes
 		self.current_virus_epi_fragments = []  # clear current virus epitope fragments
 		self.ncbi_iedb_not_equal.append("=== Virus taxid={} ===".format(self.current_virus_taxon_id))
-
+		bcells_current_virus.to_csv(join(self.output_path, "bcells_virus_" + self.current_virus_taxon_id + ".csv"))
+		tcells_current_virus.to_csv(join(self.output_path, "tcells_virus_" + self.current_virus_taxon_id + ".csv"))
 		self.process_Bcells(bcells_current_virus)
 		self.process_Tcells(tcells_current_virus)
 
@@ -431,7 +435,7 @@ class IEDBEpitopes:
 				# find epitope regions
 				epi_regions, normalized2regions = self.find_epitope_regions(bcells_current_protein, normalized2unique)
 				# calculate RF score
-				normalized2rf_score = self.calculate_RF_score(bcells_current_protein, normalized2unique)
+				normalized2rf_info = self.calculate_RF_info(bcells_current_protein, normalized2unique)
 				# extract external links per unique epitope
 				normalized2external_links = self.find_epitope_external_links(bcells_current_protein, normalized2unique)
 
@@ -448,7 +452,7 @@ class IEDBEpitopes:
 						is_linear = True
 						reg_start, reg_end = region[0], region[-1]
 						# decrease by one the region start to convert 1-index to 0-index
-						ncbi_prot_epi = protein_record.seq[region[0] - 1 : region[-1]]
+						ncbi_prot_epi = protein_record.seq[region[0] - 1: region[-1]]
 
 						if ncbi_prot_epi != normalized:  # append discordant epitopes
 							self.ncbi_iedb_not_equal.append(
@@ -458,14 +462,25 @@ class IEDBEpitopes:
 										                                                              normalized])))
 					external_links = normalized2external_links[normalized]
 
-					# create epitope even does not contain RF information
 					epitope = Epitope(self.current_virus_taxon_id, protein.get_ncbi_id(), host_taxon_id, "B cell",
-						                  normalized2allele[normalized], normalized2rf_score[normalized],
-						                  str(normalized), reg_start,
-						                  reg_end, external_links, prediction_process, is_linear)
+					                  normalized2allele[normalized], normalized2rf_info[normalized],
+					                  str(normalized),
+					                  reg_start, reg_end,
+					                  external_links, prediction_process, is_linear)
 					self.current_virus_epitopes.append(epitope)
 					if not is_linear:
 						self.current_virus_epi_fragments = self.current_virus_epi_fragments + epitope.get_fragments()
+				# if normalized2rf_info[normalized]['negative']['exists_neg_assay']:
+				# 	rf_info = {'rf_score': normalized2rf_info[normalized]['negative']['rf_score'],
+				# 	           'is_positive': False}
+				# 	epitope = Epitope(self.current_virus_taxon_id, protein.get_ncbi_id(), host_taxon_id, "T cell",
+				# 	                  normalized2allele[normalized], rf_info,
+				# 	                  str(normalized),
+				# 	                  reg_start, reg_end,
+				# 	                  external_links, prediction_process, is_linear)
+				# 	self.current_virus_epitopes.append(epitope)
+				# 	if not is_linear:
+				# 		self.current_virus_epi_fragments = self.current_virus_epi_fragments + epitope.get_fragments()
 				# print inspection: for each protein print last epitope
 				all_attributes = self.current_virus_epitopes[-1].get_all_attributes()
 				print(all_attributes)
@@ -633,12 +648,13 @@ class IEDBEpitopes:
 					epi2external_links[normalized].append(str(row["Reference IRI"]))
 		return epi2external_links
 
-	def calculate_RF_score(self, idbe_assay, normalized2unique):
+	def calculate_RF_info(self, idbe_assay, normalized2unique):
 		"""
-		Calculate RF score for T cell assays, using:
+		Calculate RF score for assays, using:
 		RF = (r-sqrt(r))/t,
 		where r is the # positive responding assays
 		and t is the # of the total tested assays
+		and also extract if the assay is positive or negative
 
 		Parameters
 		----------
@@ -649,35 +665,51 @@ class IEDBEpitopes:
 
 		Returns
 		-------
-		dict of str : float
-			dictionary mapping the normalized epitope to RF score value
+		dict of dict of
+			dictionary mapping the normalized epitope to RF score value and if the assay is positive or negative
+			example: {.. {"MNTP..AAQYF":{ 'positive':{'rf_score':0.5,'exists_pos_assay':True},'negative':{'rf_score':0.0,'exists_neg_assay':False} } }..}
 		"""
 		print("Map unique epitope sequence to RF score")
-		rf_scores = {}
+		rf_info = {}
 		for normalized, unique in normalized2unique.items():
 			# sum r and t for all assays testing the current epitope
-			t, r = 0.0, 0.0
-			for _, row in idbe_assay.loc[idbe_assay["Description"] == unique, ["Qualitative Measure", "Number of Subjects Tested",
-			                                                                   "Number of Subjects Responded"]].iterrows():
-				if row["Qualitative Measure"] == "Negative":
-					t == 0
+			t_positive, r_positive = 0.0, 0.0
+			t_negative = 0.0
+			epi_rf_info = {'positive': {'rf_score': -1.0, 'exists_pos_assay': False},
+			               'negative': {'rf_score': -1.0, 'exists_neg_assay': False}}
+			for _, row in idbe_assay.loc[
+				idbe_assay["Description"] == unique, ["Qualitative Measure", "Number of Subjects Tested",
+				                                      "Number of Subjects Responded"]].iterrows():
+
+				if row["Qualitative Measure"].lower() == 'negative':
+					epi_rf_info['negative']['exists_neg_assay'] = True
+					t_negative = 0
 				else:  # positive assays
+					epi_rf_info['positive']['exists_pos_assay'] = True
 					if isnan(row["Number of Subjects Tested"]):
-						t = t + 1.0
+						t_positive = t_positive + 1.0
 					else:
-						t = t + row["Number of Subjects Tested"]
+						t_positive = t_positive + row["Number of Subjects Tested"]
 					if isnan(row["Number of Subjects Responded"]):
-						r = r + 1.0
+						r_positive = r_positive + 1.0
 					else:
-						r = r + row["Number of Subjects Responded"]
-			if t == 0:  # no information of tested subjects from all occurences of the epitope, assign -1
-				rf_score = -1.0
-			else:
-				rf_score = (r - sqrt(r)) / t
-			rf_scores[normalized] = rf_score
-		assert len(rf_scores) == len(list(
+						r_positive = r_positive + row["Number of Subjects Responded"]
+			# after passing all occurences of an unique epitope
+			# aggregate the RF for positive and examine if it was found in a negative assay
+			if epi_rf_info['positive']['exists_pos_assay']:
+				if t_positive == 0:  # no information of tested subjects from all occurrences of the epitope, assign -1
+					rf_score = -1.0
+				else:
+					rf_score = (r_positive - sqrt(r_positive)) / t_positive
+				epi_rf_info['positive']['rf_score'] = rf_score
+			if epi_rf_info['negative'][
+				'exists_neg_assay']:  # for negative assay, RF = -1 (RF is calculated for positive assays)
+				# here use t_negative to compute rf_score, if needed
+				epi_rf_info['negative']['rf_score'] = -1.0
+			rf_info[normalized] = epi_rf_info
+		assert len(rf_info) == len(list(
 			normalized2unique.keys())), "AssertionError: number of epitopes is not equal to the number of RF scores"
-		return rf_scores
+		return rf_info
 
 	def process_Tcells(self, tcells_current_virus):
 		"""
@@ -725,8 +757,8 @@ class IEDBEpitopes:
 				normalized2allele = self.map_epitope2allele(tcells_current_protein, normalized2unique, True)
 				# find epitope regions
 				epi_regions, normalized2regions = self.find_epitope_regions(tcells_current_protein, normalized2unique)
-				# calculate RF score
-				normalized2rf_score = self.calculate_RF_score(tcells_current_protein, normalized2unique)
+				# calculate RF info
+				normalized2rf_info = self.calculate_RF_info(tcells_current_protein, normalized2unique)
 				# extract external links per unique epitope
 				normalized2external_links = self.find_epitope_external_links(tcells_current_protein, normalized2unique)
 
@@ -740,19 +772,30 @@ class IEDBEpitopes:
 					external_links = normalized2external_links[normalized]
 					reg_start, reg_end = region[0], region[-1]
 					# decrease by one the region start to convert 1-index to 0-index
-					ncbi_prot_epi = protein_record.seq[region[0]-1:region[-1]]
+					ncbi_prot_epi = protein_record.seq[region[0] - 1:region[-1]]
 					if ncbi_prot_epi != normalized:  # append discordant epitopes
 						self.ncbi_iedb_not_equal.append(
 							"iedb frag:{}, ncbi prot:{}, iedb epitope link(s): {}".format(normalized, ncbi_prot_epi,
 							                                                              " ".join(external_links)))
 
-					# create epitope object even if RF information is not given
+					# create epitope object for the two possible types of assay, if are found in the data
+					# if normalized2rf_info[normalized]['positive']['exists_pos_assay']:
+					# 	rf_info = {'rf_score': normalized2rf_info[normalized]['positive']['rf_score'],'is_positive': True}
 					epitope = Epitope(self.current_virus_taxon_id, protein.get_ncbi_id(), host_taxon_id, "T cell",
-						                  normalized2allele[normalized], normalized2rf_score[normalized],
-						                  str(normalized),
-						                  reg_start, reg_end,
-						                  external_links, prediction_process, is_linear)
+					                  normalized2allele[normalized], normalized2rf_info[normalized],
+					                  str(normalized),
+					                  reg_start, reg_end,
+					                  external_links, prediction_process, is_linear)
 					self.current_virus_epitopes.append(epitope)
+				# if normalized2rf_info[normalized]['negative']['exists_neg_assay']:
+				# 	rf_info = {'rf_score': normalized2rf_info[normalized]['negative']['rf_score'],
+				# 	           'is_positive': False}
+				# 	epitope = Epitope(self.current_virus_taxon_id, protein.get_ncbi_id(), host_taxon_id, "T cell",
+				# 	                  normalized2allele[normalized], rf_info,
+				# 	                  str(normalized),
+				# 	                  reg_start, reg_end,
+				# 	                  external_links, prediction_process, is_linear)
+				# 	self.current_virus_epitopes.append(epitope)
 				all_attributes = self.current_virus_epitopes[-1].get_all_attributes()
 				print(all_attributes)
 		print("====")

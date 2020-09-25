@@ -51,7 +51,7 @@ class IEDBEpitopes:
 		self.cell_epitopes_path = join(data_path, cell_epitopes_folder)
 		self.viruses_path = join(data_path, viruses_folder)
 
-		self.tcell_iedb_assays, self.bcell_iedb_assays = None, None
+		self.tcell_iedb_assays, self.bcell_iedb_assays, self.mhc_iedb_assays = None, None, None
 		self.host_taxon_id = host_taxon_id.split("_")[1]
 		self.host_name = str(host_name)
 		self.hosts_info = {}  # keep all host information in a dictionary: {host_id: host name, ..,}
@@ -159,7 +159,7 @@ class IEDBEpitopes:
 			print("Create file: {}".format(epitopes_name))
 			with open(join(self.output_path, epitopes_name), "w") as epitopes_out:
 				epitopes_out.write(
-					"epitope_id\tvirus_taxid\thost_taxid\thost_name\tprotein_ncbi_id\tcell_type\tmhc_class\tmhc_restriction\tresponse_frequency_pos\tfound_in_pos_assay\tfound_in_neg_assay\tepitope_sequence\tepitope_start\tepitope_stop\texternal_links\tprediction_process\tis_linear\n")
+					"epitope_id\tvirus_taxid\thost_id\tsource_host_name\tprotein_ncbi_id\tcell_type\tmhc_class\tmhc_restriction\tresponse_frequency_pos\tassay_types\tepitope_sequence\tepitope_start\tepitope_stop\texternal_links\tprediction_process\tis_linear\n")
 
 		with open(join(self.output_path, epitopes_name), "a") as epitopes_out:
 			print("Update file: {}".format(epitopes_name))
@@ -183,8 +183,7 @@ class IEDBEpitopes:
 					 epi_attributes['host_name'], epi_attributes["protein_ncbi_id"], epi_attributes["cell_type"],
 					 epi_attributes["mhc_class"], epi_attributes["mhc_allele"],
 					 str(epi_attributes["response_frequency_positive"]),
-					 str(epi_attributes["found_in_positive_assays"]),
-					 str(epi_attributes["found_in_negative_assays"]), epi_seq,
+					 str(epi_attributes["assay_types"]), epi_seq,
 					 str(epi_attributes["region_start"]), str(epi_attributes["region_stop"]),
 					 ",".join(epi_attributes["external_links"]),
 					 str(epi_attributes["prediction_process"]), str(epi_attributes["is_linear"])])
@@ -193,7 +192,7 @@ class IEDBEpitopes:
 
 	def load_iedb_csvs(self):
 		"""
-		Load IEDB B and T cells assays csvs
+		Load IEDB for B, T cells and MHC ligands assays csvs
 
 		Returns
 		-------
@@ -209,8 +208,12 @@ class IEDBEpitopes:
 			self.cell_epitopes_path)
 		self.bcell_iedb_assays = read_csv(join(self.cell_epitopes_path, "bcell_full_v3.csv.gz"), sep=",", header=1,
 		                                  compression='gzip')
+		assert isfile(join(self.cell_epitopes_path,"mhc_ligand_full.csv.gz")), "AssertionError: IEDB MHC ligand assays csv was not found in {}".format(
+			self.cell_epitopes_path)
+		self.mhc_iedb_assays = read_csv(join(self.cell_epitopes_path,"mhc_ligand_full.csv.gz"), sep=",", header=1, compression='gzip')
 		print("B cell subset number of non-unique epitopes: {}".format(self.bcell_iedb_assays.shape[0]))
 		print("T cell subset number of non-unique epitopes: {}".format(self.tcell_iedb_assays.shape[0]))
+		print("MHC ligand subset number of non-unique epitopes: {}".format(self.mhc_iedb_assays.shape[0]))
 		print("---")
 
 	def subset_iedb_by_host_iri(self, iedb_assay, host_iri):
@@ -244,9 +247,9 @@ class IEDBEpitopes:
 			print("Select positive assays")
 			self.tcell_iedb_assays = self.tcell_iedb_assays.loc[
 				self.tcell_iedb_assays["Qualitative Measure"].str.contains(self.assay_type, case=False)]
-
 			self.bcell_iedb_assays = self.bcell_iedb_assays.loc[
 				self.bcell_iedb_assays["Qualitative Measure"].str.contains(self.assay_type, case=False)]
+			self.mhc_iedb_assays = self.mhc_iedb_assays.loc[self.mhc_iedb_assays["Qualitative Measure"].str.contains(self.assay_type,case=False)]
 		else:
 			print("Select all assay type: positive and negative")
 		if self.host_taxon_id != "all":
@@ -255,11 +258,13 @@ class IEDBEpitopes:
 			host_taxid = self.url_prefixes["taxid"] + self.host_taxon_id
 			self.tcell_iedb_assays = self.tcell_iedb_assays.loc[self.tcell_iedb_assays["Host IRI"] == host_taxid]
 			self.bcell_iedb_assays = self.bcell_iedb_assays.loc[self.bcell_iedb_assays["Host IRI"] == host_taxid]
+			self.mhc_iedb_assays = self.mhc_iedb_assays.loc[self.mhc_iedb_assays["Host IRI"] == host_taxid]
 		else:
 			print("Select all available hosts")
 
 		print("B cell subset number of non-unique epitopes: {}".format(self.bcell_iedb_assays.shape[0]))
 		print("T cell subset number of non-unique epitopes: {}".format(self.tcell_iedb_assays.shape[0]))
+		print("MHC ligand subset number of non-unique epitopes: {}".format(self.mhc_iedb_assays.shape[0]))
 
 	def subset_Bcells_by_epi_type(self):
 		"""
@@ -281,11 +286,15 @@ class IEDBEpitopes:
 
 		Returns
 		-------
-		Pandas.DataFrame, Pandas.DataFrame
-			B-cell IEDB assays related only to virus id, T-cell IEDB assay only to virus id
+		Pandas.DataFrame
+			B-cell IEDB assays only for virus id
+		Pandas.DataFrame
+			T-cell IEDB assay only for virus id
+		Pandas.DataFrame
+			MHC ligand assay only for virus id
 		"""
 		print("Get iedb only for taxon id={}".format(self.current_virus_taxon_id))
-
+		# select T cell assay by virus id
 		tcell_iedb_virus = self.tcell_iedb_assays.loc[
 			self.tcell_iedb_assays["Parent Species IRI"].str.split("NCBITaxon_").str[
 				-1].str.strip() == self.current_virus_taxon_id]
@@ -294,6 +303,8 @@ class IEDBEpitopes:
 			tcell_iedb_virus = self.tcell_iedb_assays.loc[
 				self.tcell_iedb_assays["Organism IRI"].str.split("NCBITaxon_").str[
 					-1].str.strip() == self.current_virus_taxon_id]
+
+		# select B cell assays by virus id
 		bcell_iedb_virus = self.bcell_iedb_assays.loc[
 			self.bcell_iedb_assays["Parent Species IRI"].str.split("NCBITaxon_").str[
 				-1].str.strip() == self.current_virus_taxon_id]
@@ -302,11 +313,21 @@ class IEDBEpitopes:
 			bcell_iedb_virus = self.bcell_iedb_assays.loc[
 				self.bcell_iedb_assays["Organism IRI"].str.split("NCBITaxon_").str[
 					-1].str.strip() == self.current_virus_taxon_id]
+
+		# select MHC ligand assays by virus id
+		mhc_iedb_virus = self.mhc_iedb_assays.loc[self.mhc_iedb_assays["Parent Species IRI"].str.split("NCBITaxon_").str[-1].str.strip() == self.current_virus_taxon_id]
+		if mhc_iedb_virus.shape[0] == 0:
+			print("2nd attempt: Match with Organism IRI")
+			mhc_iedb_virus = self.mhc_iedb_assays.loc[
+				self.mhc_iedb_assays["Organism IRI"].str.split("NCBITaxon_").str[-1].str.strip() == self.current_virus_taxon_id
+			]
 		print("B cell subset for virus contains {} non unique epitopes".format(bcell_iedb_virus.shape[0]))
 		print("B cell head: {}".format(bcell_iedb_virus.head()))
 		print("T cell subset for virus contains {} non unique epitopes".format(tcell_iedb_virus.shape[0]))
 		print("T cell head: {}".format(tcell_iedb_virus.head()))
-		return bcell_iedb_virus, tcell_iedb_virus
+		print("MHC ligand subset for virus contains {} non unique epitopes".format(mhc_iedb_virus.shape[0]))
+		print("MHC ligand head: {}".format(mhc_iedb_virus.head()))
+		return bcell_iedb_virus, tcell_iedb_virus, mhc_iedb_virus
 
 	def process_all_viruses(self):
 		"""
@@ -322,7 +343,8 @@ class IEDBEpitopes:
 		if self.host_taxon_id == "all":
 			all_host_info_tcells = self.extract_host_info(self.tcell_iedb_assays)
 			all_host_info_bcells = self.extract_host_info(self.bcell_iedb_assays)
-			self.hosts_info = {**all_host_info_tcells, **all_host_info_bcells}
+			all_host_info_mhc = self.extract_host_info(self.mhc_iedb_assays)
+			self.hosts_info = {**all_host_info_tcells, **all_host_info_bcells, **all_host_info_mhc}
 
 		with scandir(self.viruses_path) as viruses_dir:
 			for content in viruses_dir:
@@ -455,16 +477,18 @@ class IEDBEpitopes:
 		print("=== Virus ===")
 		print("Process proteins of virus with taxon id: {}".format(self.current_virus_taxon_id))
 		self.load_virus_proteins(virus_proteins_path)
-		bcells_current_virus, tcells_current_virus = self.subset_iedb_by_virus_id()
+		bcells_current_virus, tcells_current_virus, mhc_current_virus = self.subset_iedb_by_virus_id()
 		self.current_virus_epitopes = []  # clear current virus epitopes
 		self.current_virus_epi_fragments = []  # clear current virus epitope fragments
 		self.ncbi_iedb_not_equal.append("=== Virus taxid={} ===".format(self.current_virus_taxon_id))
 		bcells_current_virus.to_csv(join(self.output_path, "bcells_virus_" + self.current_virus_taxon_id + ".csv"))
 		tcells_current_virus.to_csv(join(self.output_path, "tcells_virus_" + self.current_virus_taxon_id + ".csv"))
+		mhc_current_virus.to_csv(join(self.output_path,"mhc_virus_" + self.current_virus_taxon_id + ".csv"))
 
 		if self.host_taxon_id == "all":
 			available_hosts_bcells = self.find_unique_host_iris(bcells_current_virus)
 			available_hosts_tcells = self.find_unique_host_iris(tcells_current_virus)
+			available_hosts_mhc = self.find_unique_host_iris(mhc_current_virus)
 			for unique_host_iri in list(self.hosts_info.keys()):
 				if unique_host_iri in available_hosts_bcells:
 					bcells_current_virus_host = self.subset_iedb_by_host_iri(bcells_current_virus, unique_host_iri)
@@ -472,9 +496,94 @@ class IEDBEpitopes:
 				if unique_host_iri in available_hosts_tcells:
 					tcells_current_virus_host = self.subset_iedb_by_host_iri(tcells_current_virus, unique_host_iri)
 					self.process_Tcells(tcells_current_virus_host)
+				if unique_host_iri in available_hosts_mhc:
+					mhc_current_virus_host = self.subset_iedb_by_host_iri(mhc_current_virus,unique_host_iri)
+					self.process_MHC(mhc_current_virus_host)
 		else:  # for only one host id the assay is already subset
 			self.process_Bcells(bcells_current_virus)
 			self.process_Tcells(tcells_current_virus)
+			self.process_MHC(mhc_current_virus)
+
+	def process_MHC(self, mhc_current_virus):
+		"""
+		Process MHC ligand assays for current virus
+
+		Parameters
+		----------
+		mhc_current_virus : Pandas.DataFrame
+			MHC ligand assays for current virus
+
+		Returns
+		-------
+		None
+		"""
+		print("\nProcess MHC ligands")
+		self.ncbi_iedb_not_equal.append("MHC:")
+		for protein_id, protein in self.current_virus_proteins.items():
+			print("---")
+			print("Process protein with uniprot id: {}".format(protein_id))
+			iedb_uniprot_id = self.url_prefixes["uniprot"] + protein.get_uniprot_id()
+			mhc_current_protein = mhc_current_virus.loc[
+				mhc_current_virus["Parent Protein IRI"] == iedb_uniprot_id]
+
+			if mhc_current_protein.shape[0] == 0:
+				print("Could not match using uniprot id")
+				print("2nd attempt: Match with protein name")
+				mhc_current_protein = mhc_current_virus.loc[
+					mhc_current_virus["Parent Protein"].str.split("[").str[
+						0].str.strip().str.lower() == protein.get_name().lower()]
+
+			if mhc_current_protein.shape[0] == 0:
+				print("Could not match using protein name")
+				print("3rd attempt: Match with antigen name")
+				mhc_current_protein = mhc_current_virus.loc[
+					mhc_current_virus["Antigen Name"].str.strip().str.lower()
+					== protein.get_name().lower()]
+			print("Number of non unique epitopes for protein = {}".format(mhc_current_protein.shape[0]))
+
+			if mhc_current_protein.shape[0] == 0:
+				print("Skip protein as no epitopes are found in IEDB")
+			else:
+				# normalized epitopes
+				normalized2unique = self.normalize_unique_epitope_sequences(mhc_current_protein)
+				# map epitope to allele
+				normalized2allele = self.map_epitope2MCH_info(mhc_current_protein, normalized2unique, False)
+				# find epitope regions
+				epi_regions, normalized2regions = self.find_epitope_regions(mhc_current_protein, normalized2unique)
+				# calculate RF info
+				normalized2rf_info = self.calculate_RF_info(mhc_current_protein, normalized2unique)
+				# extract external links per unique epitope
+				normalized2external_links = self.find_epitope_external_links(mhc_current_protein, normalized2unique)
+				# get current host IRI
+				current_host_id = unique(mhc_current_protein["Host IRI"])[0]
+				# current_host_id self.normalize_host_ids(current_host_iri) #TODO
+				# create an Epitope object for each identified IEDB epitope
+				host_taxon_id = self.host_taxon_id
+				prediction_process = "IEDB_import"
+				is_linear = True  # default for T cells
+				# get protein record
+				protein_record = protein.get_record()
+				for normalized, region in normalized2regions.items():
+					external_links = normalized2external_links[normalized]
+					reg_start, reg_end = region[0], region[-1]
+					# decrease by one the region start to convert 1-index to 0-index
+					ncbi_prot_epi = protein_record.seq[region[0] - 1:region[-1]]
+					if ncbi_prot_epi != normalized:  # append discordant epitopes
+						self.ncbi_iedb_not_equal.append(
+							"iedb frag:{}, ncbi prot:{}, iedb epitope link(s): {}".format(normalized, ncbi_prot_epi,
+							                                                              " ".join(external_links)))
+
+					# create epitope object for the two possible types of assay, if are found in the data
+					epitope = Epitope(self.current_virus_taxon_id, protein.get_ncbi_id(), current_host_id,
+					                  self.hosts_info[current_host_id], "MHC Ligand",
+					                  normalized2allele[normalized], normalized2rf_info[normalized],
+					                  str(normalized),
+					                  reg_start, reg_end,
+					                  external_links, prediction_process, is_linear)
+					self.current_virus_epitopes.append(epitope)
+				all_attributes = self.current_virus_epitopes[-1].get_all_attributes()
+				print(all_attributes)
+		print("====")
 
 	def process_Bcells(self, bcells_current_virus):
 		"""
@@ -517,7 +626,7 @@ class IEDBEpitopes:
 				# normalize epitopes
 				normalized2unique = self.normalize_unique_epitope_sequences(bcells_current_protein)
 				# map epitope to allele
-				normalized2allele = self.map_epitope2MCH_info(bcells_current_protein, normalized2unique, False)
+				normalized2allele = self.map_epitope2MCH_info(bcells_current_protein, normalized2unique, True)
 				# find epitope regions
 				epi_regions, normalized2regions = self.find_epitope_regions(bcells_current_protein, normalized2unique)
 				# calculate RF score
@@ -624,7 +733,7 @@ class IEDBEpitopes:
 			normalized2unique[normalized] = uniq_epi
 		return normalized2unique
 
-	def map_epitope2MCH_info(self, iedb_assay, normalized2unique, is_tcell):
+	def map_epitope2MCH_info(self, iedb_assay, normalized2unique, is_bcell):
 		"""
 		Map epitopes to allele information (MHC class and allele name)
 
@@ -634,21 +743,30 @@ class IEDBEpitopes:
 			dataframe created from csv of IEDB assay tab
 		normalized2unique : dict of str : str
 			dictionary mapping normalized epitope to unique epitope
-		is_tcell : bool
-			Processing T-cells (True), otherwise it is B-cells (False)
+		is_bcell : bool
+			Processing B-cells (True), otherwise processing B-cells or MHC ligand assays (False)
 
 		Returns
 		-------
 		dict of str: dict of str : str
 			dictionary mapping normalzed epitopes to their allele info
 			example: {.."MNTP..FGRQW":{'MHC_class':'I','MHC_allele':'H2-Kd'} ..}
+
+		Defaults:
+		variable        default_value       meaning
+		class               None            not applicable (B-cell are not related to MHC class)
+		class               unknown         not reported MHC class (Tcell or MHC ligand)
+		allele              None            not applicable (B-cell are not related to MHC allele)
+		allele              unknown         not reported allele name (Tcell or MHC ligand)
 		"""
 		print("Map unique epitope sequence to allele information")
 		normalized2mhc = {}
 		# for each pair normalized,unique find the allele information based on the unique allele
 		# then save it for the corresponding normalized epitope
 		for normalized_epi, uniq_epi in normalized2unique.items():
-			if is_tcell:
+			if is_bcell:
+				normalized2mhc[normalized_epi] = {"class": None, "allele": None}
+			else:
 				if uniq_epi not in normalized2mhc:
 					all_mhc_allele_names = []
 					all_mhc_classes = []
@@ -668,8 +786,7 @@ class IEDBEpitopes:
 						normalized2mhc[normalized_epi]["class"] = ",".join(all_mhc_classes)
 					if len(all_mhc_allele_names) > 0:
 						normalized2mhc[normalized_epi]["allele"] = ",".join(all_mhc_allele_names)
-			else:
-				normalized2mhc[normalized_epi] = {"class": None, "allele": None}
+
 
 		return normalized2mhc
 
@@ -752,6 +869,12 @@ class IEDBEpitopes:
 		dict of dict of
 			dictionary mapping the normalized epitope to RF score value and if the assay is positive or negative
 			example: {.. {"MNTP..AAQYF":{ 'positive':{'rf_score':0.5,'exists_pos_assay':True},'negative':{'rf_score':0.0,'exists_neg_assay':False} } }..}
+
+		Defaults:
+		variable        default_value       meaning
+		rf_score            0               total rf_score is 0
+		rf_score            -1              no reported necessary information to compute rf_score
+		=> -1 will be converted to None in the Epitope table attribute value
 		"""
 		print("Map unique epitope sequence to RF score")
 		rf_info = {}
@@ -838,7 +961,7 @@ class IEDBEpitopes:
 				# normalized epitopes
 				normalized2unique = self.normalize_unique_epitope_sequences(tcells_current_protein)
 				# map epitope to allele
-				normalized2allele = self.map_epitope2MCH_info(tcells_current_protein, normalized2unique, True)
+				normalized2allele = self.map_epitope2MCH_info(tcells_current_protein, normalized2unique, False)
 				# find epitope regions
 				epi_regions, normalized2regions = self.find_epitope_regions(tcells_current_protein, normalized2unique)
 				# calculate RF info

@@ -56,8 +56,15 @@ class Epitope:
 			self.response_frequency_positive = None
 		else:
 			self.response_frequency_positive = str(response_frequency_info["positive"]["rf_score"])
-		self.found_in_positive_assays = response_frequency_info["positive"]["exists_pos_assay"]
-		self.found_in_negative_assays = response_frequency_info["negative"]["exists_neg_assay"]
+
+		# convert the two boolean to one categorical
+		if response_frequency_info["positive"]["exists_pos_assay"] and response_frequency_info["negative"]["exists_neg_assay"]:
+			self.assay_types = "both"
+		elif response_frequency_info["positive"]:
+			self.assay_types = "positive"
+		elif response_frequency_info["negative"]:
+			self.assay_type = "negative"
+
 		self.seq = region_seq
 		self.region_start = region_start
 		self.region_stop = region_stop
@@ -135,8 +142,7 @@ class Epitope:
 		        "mhc_class": self.mhc_class,
 		        "mhc_allele": self.mhc_allele,
 		        "response_frequency_positive": self.response_frequency_positive,
-		        "found_in_positive_assays": self.found_in_positive_assays,
-		        "found_in_negative_assays": self.found_in_negative_assays,
+		        "assay_types": self.assay_types,
 		        "region_seq": self.seq,
 		        "region_start": self.region_start,
 		        "region_stop": self.region_stop,

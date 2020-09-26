@@ -208,9 +208,11 @@ class IEDBEpitopes:
 			self.cell_epitopes_path)
 		self.bcell_iedb_assays = read_csv(join(self.cell_epitopes_path, "bcell_full_v3.csv.gz"), sep=",", header=1,
 		                                  compression='gzip')
-		assert isfile(join(self.cell_epitopes_path,"mhc_ligand_full.csv.gz")), "AssertionError: IEDB MHC ligand assays csv was not found in {}".format(
+		assert isfile(join(self.cell_epitopes_path,
+		                   "mhc_ligand_full.csv.gz")), "AssertionError: IEDB MHC ligand assays csv was not found in {}".format(
 			self.cell_epitopes_path)
-		self.mhc_iedb_assays = read_csv(join(self.cell_epitopes_path,"mhc_ligand_full.csv.gz"), sep=",", header=1, compression='gzip')
+		self.mhc_iedb_assays = read_csv(join(self.cell_epitopes_path, "mhc_ligand_full.csv.gz"), sep=",", header=1,
+		                                compression='gzip')
 		print("B cell subset number of non-unique epitopes: {}".format(self.bcell_iedb_assays.shape[0]))
 		print("T cell subset number of non-unique epitopes: {}".format(self.tcell_iedb_assays.shape[0]))
 		print("MHC ligand subset number of non-unique epitopes: {}".format(self.mhc_iedb_assays.shape[0]))
@@ -249,7 +251,8 @@ class IEDBEpitopes:
 				self.tcell_iedb_assays["Qualitative Measure"].str.contains(self.assay_type, case=False)]
 			self.bcell_iedb_assays = self.bcell_iedb_assays.loc[
 				self.bcell_iedb_assays["Qualitative Measure"].str.contains(self.assay_type, case=False)]
-			self.mhc_iedb_assays = self.mhc_iedb_assays.loc[self.mhc_iedb_assays["Qualitative Measure"].str.contains(self.assay_type,case=False)]
+			self.mhc_iedb_assays = self.mhc_iedb_assays.loc[
+				self.mhc_iedb_assays["Qualitative Measure"].str.contains(self.assay_type, case=False)]
 		else:
 			print("Select all assay type: positive and negative")
 		if self.host_taxon_id != "all":
@@ -315,12 +318,15 @@ class IEDBEpitopes:
 					-1].str.strip() == self.current_virus_taxon_id]
 
 		# select MHC ligand assays by virus id
-		mhc_iedb_virus = self.mhc_iedb_assays.loc[self.mhc_iedb_assays["Parent Species IRI"].str.split("NCBITaxon_").str[-1].str.strip() == self.current_virus_taxon_id]
+		mhc_iedb_virus = self.mhc_iedb_assays.loc[
+			self.mhc_iedb_assays["Parent Species IRI"].str.split("NCBITaxon_").str[
+				-1].str.strip() == self.current_virus_taxon_id]
 		if mhc_iedb_virus.shape[0] == 0:
 			print("2nd attempt: Match with Organism IRI")
 			mhc_iedb_virus = self.mhc_iedb_assays.loc[
-				self.mhc_iedb_assays["Organism IRI"].str.split("NCBITaxon_").str[-1].str.strip() == self.current_virus_taxon_id
-			]
+				self.mhc_iedb_assays["Organism IRI"].str.split("NCBITaxon_").str[
+					-1].str.strip() == self.current_virus_taxon_id
+				]
 		print("B cell subset for virus contains {} non unique epitopes".format(bcell_iedb_virus.shape[0]))
 		print("B cell head: {}".format(bcell_iedb_virus.head()))
 		print("T cell subset for virus contains {} non unique epitopes".format(tcell_iedb_virus.shape[0]))
@@ -483,7 +489,7 @@ class IEDBEpitopes:
 		self.ncbi_iedb_not_equal.append("=== Virus taxid={} ===".format(self.current_virus_taxon_id))
 		bcells_current_virus.to_csv(join(self.output_path, "bcells_virus_" + self.current_virus_taxon_id + ".csv"))
 		tcells_current_virus.to_csv(join(self.output_path, "tcells_virus_" + self.current_virus_taxon_id + ".csv"))
-		mhc_current_virus.to_csv(join(self.output_path,"mhc_virus_" + self.current_virus_taxon_id + ".csv"))
+		mhc_current_virus.to_csv(join(self.output_path, "mhc_virus_" + self.current_virus_taxon_id + ".csv"))
 
 		if self.host_taxon_id == "all":
 			available_hosts_bcells = self.find_unique_host_iris(bcells_current_virus)
@@ -497,7 +503,7 @@ class IEDBEpitopes:
 					tcells_current_virus_host = self.subset_iedb_by_host_iri(tcells_current_virus, unique_host_iri)
 					self.process_Tcells(tcells_current_virus_host)
 				if unique_host_iri in available_hosts_mhc:
-					mhc_current_virus_host = self.subset_iedb_by_host_iri(mhc_current_virus,unique_host_iri)
+					mhc_current_virus_host = self.subset_iedb_by_host_iri(mhc_current_virus, unique_host_iri)
 					self.process_MHC(mhc_current_virus_host)
 		else:  # for only one host id the assay is already subset
 			self.process_Bcells(bcells_current_virus)
@@ -767,12 +773,17 @@ class IEDBEpitopes:
 			if is_bcell:
 				normalized2mhc[normalized_epi] = {"class": None, "allele": None}
 			else:
+				mhc_class_name = None
+				if "Class" in list(iedb_assay.columns):  # T-cells
+					mhc_class_name = "Class"
+				else:  # MHC ligand
+					mhc_class_name = "MHC allele class"
 				if uniq_epi not in normalized2mhc:
 					all_mhc_allele_names = []
 					all_mhc_classes = []
 					for _, row in iedb_assay.loc[
-						iedb_assay["Description"] == uniq_epi, ["Allele Name", "Class"]].iterrows():
-						mhc_class = str(row["Class"])
+						iedb_assay["Description"] == uniq_epi, ["Allele Name", mhc_class_name]].iterrows():
+						mhc_class = str(row[mhc_class_name])
 						mhc_allele = str(row["Allele Name"])
 						if mhc_allele != 'nan':
 							if mhc_allele.replace(" ", "_") not in all_mhc_allele_names:
@@ -786,7 +797,6 @@ class IEDBEpitopes:
 						normalized2mhc[normalized_epi]["class"] = ",".join(all_mhc_classes)
 					if len(all_mhc_allele_names) > 0:
 						normalized2mhc[normalized_epi]["allele"] = ",".join(all_mhc_allele_names)
-
 
 		return normalized2mhc
 

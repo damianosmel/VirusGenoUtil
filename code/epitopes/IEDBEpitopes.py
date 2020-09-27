@@ -1,12 +1,13 @@
-from code.utils import is_fasta_file_extension
+from code.utils import is_fasta_file_extension, create_dir
 from code.epitopes.Protein import Protein
 from code.epitopes.Epitope import Epitope
 from code.epitopes.EpitopeFragment import EpitopeFragment
 from os.path import join, splitext, isfile, exists, isdir
 from pathlib import Path
 from os import scandir
-from pandas import read_csv, unique
+from pandas import read_csv, unique, concat
 from math import isnan, sqrt
+import requests
 
 
 class IEDBEpitopes:
@@ -54,7 +55,7 @@ class IEDBEpitopes:
 		self.tcell_iedb_assays, self.bcell_iedb_assays, self.mhc_iedb_assays = None, None, None
 		self.host_taxon_id = host_taxon_id.split("_")[1]
 		self.host_name = str(host_name)
-		self.hosts_info = {}  # keep all host information in a dictionary: {host_id: host name, ..,}
+		self.host_info = {}  # keep all host information in a dictionary: {host_iri: {'name': Homo Sapiens,'ncbi_id': 9606}, ..,}
 		self.assay_type = assay_type
 		self.url_prefixes = {"taxid": "http://purl.obolibrary.org/obo/NCBITaxon_",
 		                     "uniprot": "http://www.uniprot.org/uniprot/"}
@@ -67,6 +68,10 @@ class IEDBEpitopes:
 		self.epitope_id = 0
 		self.epitope_fragment_id = 0
 		self.load_iedb_csvs()
+
+		# create directory to save ONTIE.ttl files to map ONTIE ids to ncbi taxon ids
+		self.ontie_downloads_path = join(self.output_path, "ONTIE_downloads")
+		create_dir(self.ontie_downloads_path)
 
 	def get_virus_epi_fragments(self):
 		"""
@@ -159,7 +164,7 @@ class IEDBEpitopes:
 			print("Create file: {}".format(epitopes_name))
 			with open(join(self.output_path, epitopes_name), "w") as epitopes_out:
 				epitopes_out.write(
-					"epitope_id\tvirus_taxid\thost_id\tsource_host_name\tprotein_ncbi_id\tcell_type\tmhc_class\tmhc_restriction\tresponse_frequency_pos\tassay_types\tepitope_sequence\tepitope_start\tepitope_stop\texternal_links\tprediction_process\tis_linear\n")
+					"epitope_id\tvirus_taxid\tsource_host_iri\tsource_host_name\thost_ncbi_id\tprotein_ncbi_id\tcell_type\tmhc_class\tmhc_restriction\tresponse_frequency_pos\tassay_types\tepitope_sequence\tepitope_start\tepitope_stop\texternal_links\tprediction_process\tis_linear\n")
 
 		with open(join(self.output_path, epitopes_name), "a") as epitopes_out:
 			print("Update file: {}".format(epitopes_name))
@@ -179,8 +184,9 @@ class IEDBEpitopes:
 					epi_attributes["mhc_allele"] = ''
 
 				epitope_row = "\t".join(
-					[str(epi_attributes["epitope_id"]), epi_attributes["virus_taxid"], epi_attributes["host_taxid"],
-					 epi_attributes['host_name'], epi_attributes["protein_ncbi_id"], epi_attributes["cell_type"],
+					[str(epi_attributes["epitope_id"]), epi_attributes["virus_taxid"],
+					 epi_attributes["host_iri"], epi_attributes['host_name'], epi_attributes['host_ncbi_id'],
+					 epi_attributes["protein_ncbi_id"], epi_attributes["cell_type"],
 					 epi_attributes["mhc_class"], epi_attributes["mhc_allele"],
 					 str(epi_attributes["response_frequency_positive"]),
 					 str(epi_attributes["assay_types"]), epi_seq,
@@ -325,8 +331,7 @@ class IEDBEpitopes:
 			print("2nd attempt: Match with Organism IRI")
 			mhc_iedb_virus = self.mhc_iedb_assays.loc[
 				self.mhc_iedb_assays["Organism IRI"].str.split("NCBITaxon_").str[
-					-1].str.strip() == self.current_virus_taxon_id
-				]
+					-1].str.strip() == self.current_virus_taxon_id]
 		print("B cell subset for virus contains {} non unique epitopes".format(bcell_iedb_virus.shape[0]))
 		print("B cell head: {}".format(bcell_iedb_virus.head()))
 		print("T cell subset for virus contains {} non unique epitopes".format(tcell_iedb_virus.shape[0]))
@@ -334,6 +339,30 @@ class IEDBEpitopes:
 		print("MHC ligand subset for virus contains {} non unique epitopes".format(mhc_iedb_virus.shape[0]))
 		print("MHC ligand head: {}".format(mhc_iedb_virus.head()))
 		return bcell_iedb_virus, tcell_iedb_virus, mhc_iedb_virus
+
+	@staticmethod
+	def concatenate_host_name_ncbi(host_names, host_ncbis):
+		"""
+		Concatenate host name and ncbi ids into one dictionary
+
+		Parameters
+		----------
+		host_names : dict of str: str
+			map host iri to name
+		host_ncbis : dict of str: str
+			map host iri to ncbi
+
+		Returns
+		-------
+		dict of dict of str: str
+			Concatenated dictionary of host information
+			example: {'http://purl.obolibrary.org/obo/NCBITaxon_9606'{'name':'Homo Sapiens', 'ncbi_id':'9606'}}
+		"""
+		assert set(list(host_names.keys())) == set(list(host_ncbis.keys())), "AssertionError: host iris are not equal"
+		host_info = {}
+		for iri, name in host_names.items():
+			host_info[iri] = {'name': name, 'ncbi_id': host_ncbis[iri]}
+		return host_info
 
 	def process_all_viruses(self):
 		"""
@@ -347,10 +376,26 @@ class IEDBEpitopes:
 		self.subset_iedb_by_host_assay_type()
 		self.subset_Bcells_by_epi_type()
 		if self.host_taxon_id == "all":
-			all_host_info_tcells = self.extract_host_info(self.tcell_iedb_assays)
-			all_host_info_bcells = self.extract_host_info(self.bcell_iedb_assays)
-			all_host_info_mhc = self.extract_host_info(self.mhc_iedb_assays)
-			self.hosts_info = {**all_host_info_tcells, **all_host_info_bcells, **all_host_info_mhc}
+			host_name_iri_tcells = self.tcell_iedb_assays.loc[:, ['Name', 'Host IRI']]
+			host_name_iri_bcells = self.bcell_iedb_assays.loc[:, ['Name', 'Host IRI']]
+			host_name_iri_mhc = self.mhc_iedb_assays.loc[:, ['Name', 'Host IRI']]
+			host_name_iri_all_cell_types = concat([host_name_iri_tcells, host_name_iri_bcells, host_name_iri_mhc])
+			host_name_iri_all_cell_types.to_csv(join(self.output_path, "all_cells_host_info.csv"))
+			host_names_all = self.map_host_iri2name(host_name_iri_all_cell_types)
+			host_ncbi_ids_all = self.map_host_iri2ncbi(host_name_iri_all_cell_types)
+			self.hosts_info = IEDBEpitopes.concatenate_host_name_ncbi(host_names_all, host_ncbi_ids_all)
+
+		# host_names_tcells = self.map_host_iri2name(self.tcell_iedb_assays)
+		# host_ncbi_ids_tcells = self.map_host_iri2ncbi(self.tcell_iedb_assays)
+		# host_info_tcells = IEDBEpitopes.concatenate_host_name_ncbi(host_names_tcells,host_ncbi_ids_tcells)
+
+		# host_names_bcells = self.map_host_iri2name(self.bcell_iedb_assays)
+		# host_ncbi_ids_bcells = self.map_host_iri2ncbi(self.tcell_iedb_assays)
+		# host_info_bcells = IEDBEpitopes.concatenate_host_name_ncbi(host_names_bcells,host_ncbi_ids_tcells)
+		# host_names_mhc = self.map_host_iri2name(self.mhc_iedb_assays)
+		# host_ncbi_ids_mhc =	self.map_host_iri2ncbi(self.mhc_iedb_assays)
+		# host_info_mhc = IEDBEpitopes.concatenate_host_name_ncbi(host_names_mhc,host_ncbi_ids_mhc)
+		# self.hosts_info = {**host_info_tcells, **host_info_bcells, **host_info_mhc}
 
 		with scandir(self.viruses_path) as viruses_dir:
 			for content in viruses_dir:
@@ -419,10 +464,76 @@ class IEDBEpitopes:
 						self.current_virus_proteins[protein_id] = protein
 		print("====")
 
+	def retrieve_ncbi4ontie(self, ontie_id):
+		"""
+		Recursive function to retrieve ncbi id from ontie id using the IEDB ontology API:
+		https://ontology.iedb.org/doc/api.html
+
+		Credits: Tommaso for his help!
+		Parameters
+		----------
+		ontie_id : str
+			ontie id in the form: "ONTIE_000001"
+
+		Returns
+		-------
+		ncbi_id : str
+			ncbi id relating to the very first input ontie id
+		"""
+		print("Retrieve ncbi id for ontie id")
+		if not isfile(join(self.ontie_downloads_path, ontie_id + ".ttl")):
+			# if ontie file is not already downloaded,
+			# download through the API
+			response = requests.get("https://ontology.iedb.org/ontology/" + ontie_id + "?format=ttl")
+			# print(response.content)
+			with open(join(self.ontie_downloads_path + ontie_id + ".ttl"), 'wb') as f:
+				f.write(response.content)
+		else:  # if ontie file is downloaded, then go on processing file
+			print('Already downloaded ONTIE file')
+		print("---")
+
+		# process ontie file to get subclass information
+		with open(join(self.ontie_downloads_path, ontie_id + ".ttl"), 'r') as f:
+			subclass_lines = []
+			for line in f.readlines():
+				clean_line = line.strip(' ;\n')
+				if clean_line[0:15] == 'rdfs:subClassOf':
+					subclass_lines.append(clean_line)
+
+		# apply depth-first search: work only with the one branch in ontie ontology graph (subclass edge):
+		subclass_info = subclass_lines[0]
+		if 'obo:NCBITaxon_' in subclass_info:  # if ncbi id was found, terminate recursion
+			return subclass_info.split('obo:NCBITaxon_')[1]
+		else:  # if ncbi id is not found in the subclass, continue the recursion using as ontie the current subclass id
+			ontie_id = "ONTIE_" + subclass_info.split('ONTIE:')[1]
+			return self.retrieve_ncbi_id(ontie_id)
+
 	# TODO: function to make ncbi taxon -> ncbi id, ONTIE id -> ncbi id
-	def normalize_host_ids(self):
-		# host_id = host_iri.split("/")[-1]
-		pass
+	def map_host_iri2ncbi(self, iedb_assay):
+		"""
+		Map each host iri to ncbi id
+
+		Parameters
+		----------
+		iedb_assay : Pandas.DataFrame
+
+		Returns
+		-------
+		dict of str: str
+			map host iri to ncbi id
+		"""
+		host_iri2ncbi = {}
+		for host_iri in unique(iedb_assay["Host IRI"]):
+			ncbi_id = "unknown"
+			if "NCBITaxon" in str(host_iri):  # extract existing ncbi taxon id
+				ncbi_id = str(host_iri).split("NCBITaxon_")[1]
+			elif "ONTIE" in str(host_iri):
+				ontie_id = "ONTIE_" + str(host_iri).split("ONTIE_")[1]
+				ncbi_id = self.retrieve_ncbi4ontie(ontie_id)
+			host_iri2ncbi[host_iri] = ncbi_id
+		assert "unknown" not in list(
+			host_iri2ncbi.values()), "AssertionError: exists host iri which neither ncbi, nor ontie"
+		return host_iri2ncbi
 
 	def find_unique_host_iris(self, iedb_assay):
 		"""
@@ -443,9 +554,9 @@ class IEDBEpitopes:
 			all_unique_host_iris.append(host_iri)
 		return all_unique_host_iris
 
-	def extract_host_info(self, iedb_assay):
+	def map_host_iri2name(self, iedb_assay):
 		"""
-		Extract host information (IRI, name)
+		Extract host names for each IRI, IRI -> name
 
 		Parameters
 		----------
@@ -457,14 +568,19 @@ class IEDBEpitopes:
 		dict of str: str
 			host information
 		"""
-		host_info = {}
+		host_iri2names = {}
 		for host_iri in unique(iedb_assay["Host IRI"]):
-			host_names = unique(iedb_assay['Name'].loc[iedb_assay['Host IRI'] == host_iri])
-			if len(host_names) == 0:
-				host_info[host_iri] = "unknown"
-			else:
-				host_info[host_iri] = host_names[0]
-		return host_info
+			print(host_iri)
+			for _, name in iedb_assay.loc[iedb_assay["Host IRI"] == host_iri, "Name"].iteritems():
+				if host_iri not in host_iri2names:
+					host_iri2names[host_iri] = [str(name)]
+				else:
+					if str(name) not in host_iri2names[host_iri]:
+						host_iri2names[host_iri].append(str(name))
+		# sort and get the first name out of all unique available ones
+		for host_iri in list(host_iri2names.keys()):
+			host_iri2names[host_iri] = sorted(host_iri2names[host_iri])[0]
+		return host_iri2names
 
 	def process_virus_proteins(self, virus_proteins_path):
 		"""
@@ -560,9 +676,12 @@ class IEDBEpitopes:
 				normalized2rf_info = self.calculate_RF_info(mhc_current_protein, normalized2unique)
 				# extract external links per unique epitope
 				normalized2external_links = self.find_epitope_external_links(mhc_current_protein, normalized2unique)
-				# get current host IRI
-				current_host_id = unique(mhc_current_protein["Host IRI"])[0]
-				# current_host_id self.normalize_host_ids(current_host_iri) #TODO
+
+				# get current host info: IRI, name and ncbi id
+				host_iri = unique(mhc_current_protein["Host IRI"])[0]
+				host_name = self.hosts_info[host_iri]['name']
+				host_ncbi_id = self.hosts_info[host_iri]['ncbi_id']
+
 				# create an Epitope object for each identified IEDB epitope
 				host_taxon_id = self.host_taxon_id
 				prediction_process = "IEDB_import"
@@ -580,8 +699,8 @@ class IEDBEpitopes:
 							                                                              " ".join(external_links)))
 
 					# create epitope object for the two possible types of assay, if are found in the data
-					epitope = Epitope(self.current_virus_taxon_id, protein.get_ncbi_id(), current_host_id,
-					                  self.hosts_info[current_host_id], "MHC Ligand",
+					epitope = Epitope(self.current_virus_taxon_id, protein.get_ncbi_id(), host_iri, host_name,
+					                  host_ncbi_id, "MHC Ligand",
 					                  normalized2allele[normalized], normalized2rf_info[normalized],
 					                  str(normalized),
 					                  reg_start, reg_end,
@@ -639,11 +758,13 @@ class IEDBEpitopes:
 				normalized2rf_info = self.calculate_RF_info(bcells_current_protein, normalized2unique)
 				# extract external links per unique epitope
 				normalized2external_links = self.find_epitope_external_links(bcells_current_protein, normalized2unique)
-				# get current host IRI
-				current_host_iri = unique(bcells_current_protein["Host IRI"])[0]
-				# current_host_id self.normalize_host_ids(current_host_iri) #TODO
+
+				# get current host info: IRI, name and ncbi id
+				host_iri = unique(bcells_current_protein["Host IRI"])[0]
+				host_name = self.hosts_info[host_iri]['name']
+				host_ncbi_id = self.hosts_info[host_iri]['ncbi_id']
+
 				# create an Epitope object for each identified IEDB epitope
-				host_taxon_id = self.host_taxon_id
 				prediction_process = "IEDB_import"
 				# get protein record
 				protein_record = protein.get_record()
@@ -664,8 +785,8 @@ class IEDBEpitopes:
 									                                                              normalized2external_links[
 										                                                              normalized])))
 					external_links = normalized2external_links[normalized]
-					epitope = Epitope(self.current_virus_taxon_id, protein.get_ncbi_id(), current_host_iri,
-					                  self.hosts_info[current_host_iri], "B cell",
+					epitope = Epitope(self.current_virus_taxon_id, protein.get_ncbi_id(), host_iri,
+					                  host_name, host_ncbi_id, "B cell",
 					                  normalized2allele[normalized], normalized2rf_info[normalized],
 					                  str(normalized),
 					                  reg_start, reg_end,
@@ -978,9 +1099,12 @@ class IEDBEpitopes:
 				normalized2rf_info = self.calculate_RF_info(tcells_current_protein, normalized2unique)
 				# extract external links per unique epitope
 				normalized2external_links = self.find_epitope_external_links(tcells_current_protein, normalized2unique)
-				# get current host IRI
-				current_host_id = unique(tcells_current_protein["Host IRI"])[0]
-				# current_host_id self.normalize_host_ids(current_host_iri) #TODO
+
+				# get current host info: IRI, name and ncbi id
+				host_iri = unique(tcells_current_protein["Host IRI"])[0]
+				host_name = self.hosts_info[host_iri]['name']
+				host_ncbi_id = self.hosts_info[host_iri]['ncbi_id']
+
 				# create an Epitope object for each identified IEDB epitope
 				host_taxon_id = self.host_taxon_id
 				prediction_process = "IEDB_import"
@@ -998,8 +1122,8 @@ class IEDBEpitopes:
 							                                                              " ".join(external_links)))
 
 					# create epitope object for the two possible types of assay, if are found in the data
-					epitope = Epitope(self.current_virus_taxon_id, protein.get_ncbi_id(), current_host_id,
-					                  self.hosts_info[current_host_id], "T cell",
+					epitope = Epitope(self.current_virus_taxon_id, protein.get_ncbi_id(), host_iri,
+					                  host_name, host_ncbi_id, "T cell",
 					                  normalized2allele[normalized], normalized2rf_info[normalized],
 					                  str(normalized),
 					                  reg_start, reg_end,

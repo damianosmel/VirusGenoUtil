@@ -9,6 +9,8 @@ from pandas import read_csv, unique, concat
 from math import isnan, sqrt
 import requests
 import time
+from Bio import Entrez
+
 
 class IEDBEpitopes:
 	"""
@@ -22,7 +24,8 @@ class IEDBEpitopes:
 	doi: 10.1093/nar/gky1006. PMID: 30357391
 	"""
 
-	def __init__(self, data_path, cell_epitopes_folder, viruses_folder, host_taxon_id, host_name, assay_type,
+	def __init__(self, data_path, cell_epitopes_folder, viruses_folder, ontie_download_folder, host_taxon_id, host_name,
+	             assay_type,
 	             output_path):
 		"""
 		IEDBEpitopes constructor
@@ -35,6 +38,8 @@ class IEDBEpitopes:
 			B and T cell IEDB epitopes folder
 		viruses_folder : str
 			viruses protein folder
+		ontie_download_folder : str
+			ontie downloads folder containing ttls file
 		host_taxon_id : str
 			NCBI taxon id of host organism whose cells used for the experimental identification of epitopes
 		host_name : str
@@ -70,8 +75,13 @@ class IEDBEpitopes:
 		self.load_iedb_csvs()
 
 		# create directory to save ONTIE.ttl files to map ONTIE ids to ncbi taxon ids
-		self.ontie_downloads_path = join(self.output_path, "ONTIE_downloads")
-		create_dir(self.ontie_downloads_path)
+		self.ontie_downloads_path = join(data_path, ontie_download_folder)
+		create_dir(self.ontie_downloads_path)  # create if you can access ONTIE efficiently
+
+		# load email for Entrez usage
+		self.entrez_email = open(join(data_path, "email.txt")).read().strip()
+		Entrez.email = self.entrez_email
+		print("Load email for Entrez access")
 
 	def get_virus_epi_fragments(self):
 		"""
@@ -381,9 +391,10 @@ class IEDBEpitopes:
 			host_name_iri_mhc = self.mhc_iedb_assays.loc[:, ['Name', 'Host IRI']]
 			host_name_iri_all_cell_types = concat([host_name_iri_tcells, host_name_iri_bcells, host_name_iri_mhc])
 			host_name_iri_all_cell_types.to_csv(join(self.output_path, "all_cells_host_info.csv"))
-			host_names_all = self.map_host_iri2name(host_name_iri_all_cell_types)
-			host_ncbi_ids_all = self.map_host_iri2ncbi(host_name_iri_all_cell_types)
-			self.hosts_info = IEDBEpitopes.concatenate_host_name_ncbi(host_names_all, host_ncbi_ids_all)
+			self.hosts_info = self.extract_host_info(host_name_iri_all_cell_types)
+		# host_names_all = self.map_host_iri2name(host_name_iri_all_cell_types)
+		# host_ncbi_ids_all = self.map_host_iri2ncbi(host_name_iri_all_cell_types)
+		# self.hosts_info = IEDBEpitopes.concatenate_host_name_ncbi(host_names_all, host_ncbi_ids_all)
 
 		# host_names_tcells = self.map_host_iri2name(self.tcell_iedb_assays)
 		# host_ncbi_ids_tcells = self.map_host_iri2ncbi(self.tcell_iedb_assays)
@@ -487,9 +498,11 @@ class IEDBEpitopes:
 			# download through the API
 			print("https://ontology.iedb.org/ontology/" + ontie_id + "?format=ttl")
 			for i in range(0, 10):
-				response = requests.get("https://ontology.iedb.org/ontology/" + ontie_id + "?format=ttl", time.sleep(5))
-				print("responce code: {}".format(response.status_code))
+				response = requests.get("https://ontology.iedb.org/ontology/" + ontie_id + "?format=ttl",
+				                        time.sleep(20))
+				print("response code: {}".format(response.status_code))
 				if response.status_code == 200:
+					print("Success response code!")
 					break
 			with open(join(self.ontie_downloads_path, ontie_id + ".ttl"), 'wb') as f:
 				f.write(response.content)
@@ -585,6 +598,103 @@ class IEDBEpitopes:
 		for host_iri in list(host_iri2names.keys()):
 			host_iri2names[host_iri] = sorted(host_iri2names[host_iri])[0]
 		return host_iri2names
+
+	def extract_host_info(self, iedb_assay):
+		"""
+		Extract host information for each IRI, IRI -> name, ncbi id
+
+		Parameters
+		----------
+		iedb_assay : Pandas.DataFrame
+			dataframe to extract host information from
+
+		Returns
+		-------
+		dict of str: list of str
+			host information of the form {'host_iri_X':{'name':'Homo Sapiens', 'ncbi_id': 9606}}
+		"""
+		print("Extract host info")
+		host_iri2info = {}
+		for host_iri in unique(iedb_assay["Host IRI"]):
+			for _, name in iedb_assay.loc[iedb_assay["Host IRI"] == host_iri, "Name"].iteritems():
+				if host_iri not in host_iri2info:
+					host_iri2info[host_iri] = {'name': [], 'ncbi_id': []}
+					host_iri2info[host_iri]['name'].append(str(name))
+				else:
+					if str(name) not in host_iri2info[host_iri]['name']:
+						host_iri2info[host_iri]['name'].append(str(name))
+		# sort and get the first name
+		# for this first name get the taxonomy ncbi id
+		for host_iri in list(host_iri2info.keys()):
+			host_name = sorted(host_iri2info[host_iri]['name'])[0]
+			host_id = self.extract_host_ncbi_id(host_iri, host_name)
+			host_iri2info[host_iri]['name'] = host_name
+			host_iri2info[host_iri]['ncbi_id'] = host_id
+
+		return host_iri2info
+
+	def retrieve_ncbi_id_from_name(self, host_name):
+		"""
+		Retrieve ncbi id from host name
+
+		Parameters
+		----------
+		host_name : str
+			host name
+
+		Returns
+		-------
+		str
+			host ncbi id
+		"""
+		print("Retrieve ncbi id from host name: {}".format(host_name))
+		name_split = host_name.strip().split()
+		if len(name_split) > 1:
+			species_name = "+".join([name_split[0], name_split[1]]).strip()
+		else:
+			species_name = name_split[0]
+		search = Entrez.esearch(term=species_name, db="taxonomy", retmode="xml")
+		record = Entrez.read(search)
+		if len(record['IdList']) > 0:
+			return record['IdList'][0]
+		else:
+			return "unknown"
+
+	def extract_host_ncbi_id(self, host_iri, host_name):
+		"""
+		Extract host ncbi id using the name of the host iri
+		Parameters
+		----------
+		host_iri : str
+			host iri
+		host_name : str
+			host name
+
+		Returns
+		-------
+		str
+			host ncbi id
+		"""
+		print("Extract host ncbi id")
+		# first try to see if you have ncbi id in the host iri
+		if "NCBITaxon" in str(host_iri):  # extract existing ncbi taxon id
+			print("Get ncbi id from iri")
+			ncbi_id = str(host_iri).split("NCBITaxon_")[1]
+		else:
+			print("ncbi id not in iri")
+			# second try retrieving ncbi from the host name
+			response_id = self.retrieve_ncbi_id_from_name(host_name)
+			if response_id != "unknown":
+				print("Finding ncbi id using name: Success")
+				ncbi_id = response_id
+				print(ncbi_id)
+			else:
+				print("Finding ncbi using name: Fail")
+				print("Find by using ONTIE web API")
+				assert "ONTIE" in str(host_iri), "AssertError: ONTIE not in iri"
+				ontie_id = "ONTIE_" + str(host_iri).split("ONTIE_")[1]
+				ncbi_id = self.retrieve_ncbi4ontie(ontie_id)
+		return ncbi_id
 
 	def process_virus_proteins(self, virus_proteins_path):
 		"""

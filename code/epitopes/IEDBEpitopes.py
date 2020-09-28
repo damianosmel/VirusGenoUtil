@@ -8,7 +8,7 @@ from os import scandir
 from pandas import read_csv, unique, concat
 from math import isnan, sqrt
 import requests
-
+import time
 
 class IEDBEpitopes:
 	"""
@@ -482,15 +482,19 @@ class IEDBEpitopes:
 		"""
 		print("Retrieve ncbi id for ontie id")
 		if not isfile(join(self.ontie_downloads_path, ontie_id + ".ttl")):
+			print("ttl is not found, retrieve it from ONTIE")
 			# if ontie file is not already downloaded,
 			# download through the API
-			response = requests.get("https://ontology.iedb.org/ontology/" + ontie_id + "?format=ttl")
-			# print(response.content)
-			with open(join(self.ontie_downloads_path + ontie_id + ".ttl"), 'wb') as f:
+			print("https://ontology.iedb.org/ontology/" + ontie_id + "?format=ttl")
+			for i in range(0, 10):
+				response = requests.get("https://ontology.iedb.org/ontology/" + ontie_id + "?format=ttl", time.sleep(5))
+				print("responce code: {}".format(response.status_code))
+				if response.status_code == 200:
+					break
+			with open(join(self.ontie_downloads_path, ontie_id + ".ttl"), 'wb') as f:
 				f.write(response.content)
 		else:  # if ontie file is downloaded, then go on processing file
 			print('Already downloaded ONTIE file')
-		print("---")
 
 		# process ontie file to get subclass information
 		with open(join(self.ontie_downloads_path, ontie_id + ".ttl"), 'r') as f:
@@ -506,7 +510,7 @@ class IEDBEpitopes:
 			return subclass_info.split('obo:NCBITaxon_')[1]
 		else:  # if ncbi id is not found in the subclass, continue the recursion using as ontie the current subclass id
 			ontie_id = "ONTIE_" + subclass_info.split('ONTIE:')[1]
-			return self.retrieve_ncbi_id(ontie_id)
+			return self.retrieve_ncbi4ontie(ontie_id)
 
 	# TODO: function to make ncbi taxon -> ncbi id, ONTIE id -> ncbi id
 	def map_host_iri2ncbi(self, iedb_assay):
@@ -524,6 +528,7 @@ class IEDBEpitopes:
 		"""
 		host_iri2ncbi = {}
 		for host_iri in unique(iedb_assay["Host IRI"]):
+			print("new host iri")
 			ncbi_id = "unknown"
 			if "NCBITaxon" in str(host_iri):  # extract existing ncbi taxon id
 				ncbi_id = str(host_iri).split("NCBITaxon_")[1]
@@ -570,7 +575,6 @@ class IEDBEpitopes:
 		"""
 		host_iri2names = {}
 		for host_iri in unique(iedb_assay["Host IRI"]):
-			print(host_iri)
 			for _, name in iedb_assay.loc[iedb_assay["Host IRI"] == host_iri, "Name"].iteritems():
 				if host_iri not in host_iri2names:
 					host_iri2names[host_iri] = [str(name)]

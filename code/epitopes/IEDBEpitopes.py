@@ -60,7 +60,7 @@ class IEDBEpitopes:
 		self.tcell_iedb_assays, self.bcell_iedb_assays, self.mhc_iedb_assays = None, None, None
 		self.host_taxon_id = host_taxon_id.split("_")[1]
 		self.host_name = str(host_name)
-		self.host_info = {}  # keep all host information in a dictionary: {host_iri: {'name': Homo Sapiens,'ncbi_id': 9606}, ..,}
+		self.hosts_info = {}  # keep all host information in a dictionary: {host_iri: {'name': Homo Sapiens,'ncbi_id': 9606}, ..,}
 		self.assay_type = assay_type
 		self.url_prefixes = {"taxid": "http://purl.obolibrary.org/obo/NCBITaxon_",
 		                     "uniprot": "http://www.uniprot.org/uniprot/"}
@@ -209,7 +209,7 @@ class IEDBEpitopes:
 	def load_iedb_csvs(self):
 		"""
 		Load IEDB for B, T cells and MHC ligands assays csvs
-
+		Load files in chunks, credits: https://stackoverflow.com/questions/11622652/large-persistent-dataframe-in-pandas
 		Returns
 		-------
 		None
@@ -217,18 +217,21 @@ class IEDBEpitopes:
 		assert isfile(join(self.cell_epitopes_path,
 		                   "tcell_full_v3.csv.gz")), "AssertionError: IEDB Tcell assays csv was not found in {}".format(
 			self.cell_epitopes_path)
-		self.tcell_iedb_assays = read_csv(join(self.cell_epitopes_path, "tcell_full_v3.csv.gz"), sep=",", header=1,
-		                                  compression='gzip')
+		tcell_text_file_reader = read_csv(join(self.cell_epitopes_path, "tcell_full_v3.csv.gz"), sep=",", header=1,
+		                                  compression='gzip', iterator=True, chunksize=1000)
+		self.tcell_iedb_assays = concat(list(tcell_text_file_reader),ignore_index=True)
 		assert isfile(join(self.cell_epitopes_path,
 		                   "bcell_full_v3.csv.gz")), "AssertionError: IEDB Bcell assays csv was not found in {}".format(
 			self.cell_epitopes_path)
-		self.bcell_iedb_assays = read_csv(join(self.cell_epitopes_path, "bcell_full_v3.csv.gz"), sep=",", header=1,
-		                                  compression='gzip')
+		bcell_text_file_reader = read_csv(join(self.cell_epitopes_path, "bcell_full_v3.csv.gz"), sep=",", header=1,
+		                                  compression='gzip', iterator=True, chunksize=1000)
+		self.bcell_iedb_assays = concat(list(bcell_text_file_reader),ignore_index=True)
 		assert isfile(join(self.cell_epitopes_path,
 		                   "mhc_ligand_full.csv.gz")), "AssertionError: IEDB MHC ligand assays csv was not found in {}".format(
 			self.cell_epitopes_path)
-		self.mhc_iedb_assays = read_csv(join(self.cell_epitopes_path, "mhc_ligand_full.csv.gz"), sep=",", header=1,
-		                                compression='gzip')
+		mhc_iedb_assays = read_csv(join(self.cell_epitopes_path, "mhc_ligand_full.csv.gz"), sep=",", header=1,
+		                                compression='gzip',iterator=1000)
+		self.mhc_iedb_assays = concat(list(mhc_iedb_assays),ignore_index=True)
 		print("B cell subset number of non-unique epitopes: {}".format(self.bcell_iedb_assays.shape[0]))
 		print("T cell subset number of non-unique epitopes: {}".format(self.tcell_iedb_assays.shape[0]))
 		print("MHC ligand subset number of non-unique epitopes: {}".format(self.mhc_iedb_assays.shape[0]))
@@ -390,23 +393,8 @@ class IEDBEpitopes:
 			host_name_iri_bcells = self.bcell_iedb_assays.loc[:, ['Name', 'Host IRI']]
 			host_name_iri_mhc = self.mhc_iedb_assays.loc[:, ['Name', 'Host IRI']]
 			host_name_iri_all_cell_types = concat([host_name_iri_tcells, host_name_iri_bcells, host_name_iri_mhc])
-			host_name_iri_all_cell_types.to_csv(join(self.output_path, "all_cells_host_info.csv"))
-			self.hosts_info = self.extract_host_info(host_name_iri_all_cell_types)
-		# host_names_all = self.map_host_iri2name(host_name_iri_all_cell_types)
-		# host_ncbi_ids_all = self.map_host_iri2ncbi(host_name_iri_all_cell_types)
-		# self.hosts_info = IEDBEpitopes.concatenate_host_name_ncbi(host_names_all, host_ncbi_ids_all)
-
-		# host_names_tcells = self.map_host_iri2name(self.tcell_iedb_assays)
-		# host_ncbi_ids_tcells = self.map_host_iri2ncbi(self.tcell_iedb_assays)
-		# host_info_tcells = IEDBEpitopes.concatenate_host_name_ncbi(host_names_tcells,host_ncbi_ids_tcells)
-
-		# host_names_bcells = self.map_host_iri2name(self.bcell_iedb_assays)
-		# host_ncbi_ids_bcells = self.map_host_iri2ncbi(self.tcell_iedb_assays)
-		# host_info_bcells = IEDBEpitopes.concatenate_host_name_ncbi(host_names_bcells,host_ncbi_ids_tcells)
-		# host_names_mhc = self.map_host_iri2name(self.mhc_iedb_assays)
-		# host_ncbi_ids_mhc =	self.map_host_iri2ncbi(self.mhc_iedb_assays)
-		# host_info_mhc = IEDBEpitopes.concatenate_host_name_ncbi(host_names_mhc,host_ncbi_ids_mhc)
-		# self.hosts_info = {**host_info_tcells, **host_info_bcells, **host_info_mhc}
+			# host_name_iri_all_cell_types.to_csv(join(self.output_path, "all_cells_host_info.csv"))
+			self.extract_host_info(host_name_iri_all_cell_types)
 
 		with scandir(self.viruses_path) as viruses_dir:
 			for content in viruses_dir:
@@ -608,30 +596,23 @@ class IEDBEpitopes:
 		iedb_assay : Pandas.DataFrame
 			dataframe to extract host information from
 
-		Returns
-		-------
-		dict of str: list of str
-			host information of the form {'host_iri_X':{'name':'Homo Sapiens', 'ncbi_id': 9606}}
 		"""
 		print("Extract host info")
-		host_iri2info = {}
 		for host_iri in unique(iedb_assay["Host IRI"]):
 			for _, name in iedb_assay.loc[iedb_assay["Host IRI"] == host_iri, "Name"].iteritems():
-				if host_iri not in host_iri2info:
-					host_iri2info[host_iri] = {'name': [], 'ncbi_id': []}
-					host_iri2info[host_iri]['name'].append(str(name))
+				if host_iri not in self.hosts_info:
+					self.hosts_info[host_iri] = {'name': [], 'ncbi_id': []}
+					self.hosts_info[host_iri]['name'].append(str(name))
 				else:
-					if str(name) not in host_iri2info[host_iri]['name']:
-						host_iri2info[host_iri]['name'].append(str(name))
+					if str(name) not in self.hosts_info[host_iri]['name']:
+						self.hosts_info[host_iri]['name'].append(str(name))
 		# sort and get the first name
 		# for this first name get the taxonomy ncbi id
-		for host_iri in list(host_iri2info.keys()):
-			host_name = sorted(host_iri2info[host_iri]['name'])[0]
+		for host_iri in list(self.hosts_info.keys()):
+			host_name = sorted(self.hosts_info[host_iri]['name'])[0]
 			host_id = self.extract_host_ncbi_id(host_iri, host_name)
-			host_iri2info[host_iri]['name'] = host_name
-			host_iri2info[host_iri]['ncbi_id'] = host_id
-
-		return host_iri2info
+			self.hosts_info[host_iri]['name'] = host_name
+			self.hosts_info[host_iri]['ncbi_id'] = host_id
 
 	def retrieve_ncbi_id_from_name(self, host_name):
 		"""
@@ -717,9 +698,9 @@ class IEDBEpitopes:
 		self.current_virus_epitopes = []  # clear current virus epitopes
 		self.current_virus_epi_fragments = []  # clear current virus epitope fragments
 		self.ncbi_iedb_not_equal.append("=== Virus taxid={} ===".format(self.current_virus_taxon_id))
-		bcells_current_virus.to_csv(join(self.output_path, "bcells_virus_" + self.current_virus_taxon_id + ".csv"))
-		tcells_current_virus.to_csv(join(self.output_path, "tcells_virus_" + self.current_virus_taxon_id + ".csv"))
-		mhc_current_virus.to_csv(join(self.output_path, "mhc_virus_" + self.current_virus_taxon_id + ".csv"))
+		# bcells_current_virus.to_csv(join(self.output_path, "bcells_virus_" + self.current_virus_taxon_id + ".csv"))
+		# tcells_current_virus.to_csv(join(self.output_path, "tcells_virus_" + self.current_virus_taxon_id + ".csv"))
+		# mhc_current_virus.to_csv(join(self.output_path, "mhc_virus_" + self.current_virus_taxon_id + ".csv"))
 
 		if self.host_taxon_id == "all":
 			available_hosts_bcells = self.find_unique_host_iris(bcells_current_virus)
@@ -928,6 +909,7 @@ class IEDBEpitopes:
 			discontinuous epitope start, discontinuous epitope end
 		"""
 		discontinuous_epi_aa_pos = epi_description.split(",")
+		print(epi_description)
 		if epi_description[-1] != ",":
 			aa_pos_start, aa_pos_end = discontinuous_epi_aa_pos[0].strip(), discontinuous_epi_aa_pos[-1].strip()
 			pos_start = int(aa_pos_start[1:len(aa_pos_start)])

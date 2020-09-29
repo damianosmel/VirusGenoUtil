@@ -217,21 +217,27 @@ class IEDBEpitopes:
 		assert isfile(join(self.cell_epitopes_path,
 		                   "tcell_full_v3.csv.gz")), "AssertionError: IEDB Tcell assays csv was not found in {}".format(
 			self.cell_epitopes_path)
-		tcell_text_file_reader = read_csv(join(self.cell_epitopes_path, "tcell_full_v3.csv.gz"), sep=",", header=1,
-		                                  compression='gzip', iterator=True, chunksize=1000)
-		self.tcell_iedb_assays = concat(list(tcell_text_file_reader),ignore_index=True)
+		# tcell_text_file_reader = read_csv(join(self.cell_epitopes_path, "tcell_full_v3.csv.gz"), sep=",", header=1,
+		#                                   compression='gzip', iterator=True, chunksize=1000)
+		# self.tcell_iedb_assays = concat(tcell_text_file_reader,ignore_index=True)
+		self.tcell_iedb_assays =read_csv(join(self.cell_epitopes_path, "tcell_full_v3.csv.gz"), sep=",", header=1,
+		                                  compression='gzip')
 		assert isfile(join(self.cell_epitopes_path,
 		                   "bcell_full_v3.csv.gz")), "AssertionError: IEDB Bcell assays csv was not found in {}".format(
 			self.cell_epitopes_path)
-		bcell_text_file_reader = read_csv(join(self.cell_epitopes_path, "bcell_full_v3.csv.gz"), sep=",", header=1,
-		                                  compression='gzip', iterator=True, chunksize=1000)
-		self.bcell_iedb_assays = concat(list(bcell_text_file_reader),ignore_index=True)
+		# bcell_text_file_reader = read_csv(join(self.cell_epitopes_path, "bcell_full_v3.csv.gz"), sep=",", header=1,
+		#                                   compression='gzip', iterator=True, chunksize=1000)
+		# self.bcell_iedb_assays = concat(bcell_text_file_reader,ignore_index=True)
+		self.bcell_iedb_assays = read_csv(join(self.cell_epitopes_path, "bcell_full_v3.csv.gz"), sep=",", header=1,
+		                                  compression='gzip')
 		assert isfile(join(self.cell_epitopes_path,
 		                   "mhc_ligand_full.csv.gz")), "AssertionError: IEDB MHC ligand assays csv was not found in {}".format(
 			self.cell_epitopes_path)
 		mhc_iedb_assays = read_csv(join(self.cell_epitopes_path, "mhc_ligand_full.csv.gz"), sep=",", header=1,
-		                                compression='gzip',iterator=1000)
-		self.mhc_iedb_assays = concat(list(mhc_iedb_assays),ignore_index=True)
+		                                compression='gzip',iterator=True, chunksize=10000)
+		self.mhc_iedb_assays = concat(mhc_iedb_assays,ignore_index=True)
+		# self.mhc_iedb_assays = read_csv(join(self.cell_epitopes_path, "mhc_ligand_full.csv.gz"), sep=",", header=1,
+		#                                 compression='gzip')[["Name", "Parent Species IRI", "Organism IRI", "Host IRI", "Parent Protein IRI", "Antigen Name", "Description", "Starting Position", "Ending Position", "Allele Name", "MHC allele class", "Qualitative Measure", "Number of Subjects Tested", "Number of Subjects Responded", "Reference IRI"]]
 		print("B cell subset number of non-unique epitopes: {}".format(self.bcell_iedb_assays.shape[0]))
 		print("T cell subset number of non-unique epitopes: {}".format(self.tcell_iedb_assays.shape[0]))
 		print("MHC ligand subset number of non-unique epitopes: {}".format(self.mhc_iedb_assays.shape[0]))
@@ -772,6 +778,7 @@ class IEDBEpitopes:
 				# extract external links per unique epitope
 				normalized2external_links = self.find_epitope_external_links(mhc_current_protein, normalized2unique)
 
+
 				# get current host info: IRI, name and ncbi id
 				host_iri = unique(mhc_current_protein["Host IRI"])[0]
 				host_name = self.hosts_info[host_iri]['name']
@@ -1114,7 +1121,6 @@ class IEDBEpitopes:
 			for _, row in idbe_assay.loc[
 				idbe_assay["Description"] == unique, ["Qualitative Measure", "Number of Subjects Tested",
 				                                      "Number of Subjects Responded"]].iterrows():
-
 				if row["Qualitative Measure"].lower() == 'negative':
 					epi_rf_info['negative']['exists_neg_assay'] = True
 					t_negative = 0

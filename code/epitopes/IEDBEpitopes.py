@@ -715,9 +715,9 @@ class IEDBEpitopes:
 		self.current_virus_epitopes = []  # clear current virus epitopes
 		self.current_virus_epi_fragments = []  # clear current virus epitope fragments
 		self.ncbi_iedb_not_equal.append("=== Virus taxid={} ===".format(self.current_virus_taxon_id))
-		bcells_current_virus.to_csv(join(self.output_path, "bcells_virus_" + self.current_virus_taxon_id + ".csv"))
-		tcells_current_virus.to_csv(join(self.output_path, "tcells_virus_" + self.current_virus_taxon_id + ".csv"))
-		mhc_current_virus.to_csv(join(self.output_path, "mhc_virus_" + self.current_virus_taxon_id + ".csv"))
+		# bcells_current_virus.to_csv(join(self.output_path, "bcells_virus_" + self.current_virus_taxon_id + ".csv"))
+		# tcells_current_virus.to_csv(join(self.output_path, "tcells_virus_" + self.current_virus_taxon_id + ".csv"))
+		# mhc_current_virus.to_csv(join(self.output_path, "mhc_virus_" + self.current_virus_taxon_id + ".csv"))
 
 		if self.host_taxon_id == "all":
 			available_hosts_bcells = self.find_unique_host_iris(bcells_current_virus)

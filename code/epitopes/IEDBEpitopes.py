@@ -148,13 +148,21 @@ class IEDBEpitopes:
 				epi_seq = epi_attributes["region_seq"]
 			else:
 				epi_seq = None
+			if not epi_seq:
+				epi_seq = ''
+			if not epi_attributes["mhc_class"]:
+				epi_attributes["mhc_class"] = ''
+			if not epi_attributes["mhc_allele"]:
+				epi_attributes["mhc_allele"] = ''
+
 			epitope = tuple([int(epi_attributes["epitope_id"]), int(epi_attributes["virus_taxid"]),
-			                 str(epi_attributes["host_taxid"]),
+			                 str(epi_attributes["host_iri"]), str(epi_attributes['host_name']), int(epi_attributes['host_ncbi_id']),
 			                 str(epi_attributes["protein_ncbi_id"]), str(epi_attributes["cell_type"]),
-			                 epi_attributes["hla_restriction"],
-			                 float(epi_attributes["response_frequency"]), epi_seq,
-			                 int(epi_attributes["region_start"]), int(epi_attributes["region_stop"]),
-			                 epi_attributes["is_imported"], ",".join(epi_attributes["external_links"]),
+			                 str(epi_attributes["mhc_class"]), str(epi_attributes["mhc_allele"]),
+			                 str(epi_attributes["response_frequency_positive"]),
+			                 str(epi_attributes["assay_types"]),
+			                 epi_seq, int(epi_attributes["region_start"]), int(epi_attributes["region_stop"]),
+			                 ",".join(epi_attributes["external_links"]),
 			                 epi_attributes["prediction_process"], epi_attributes["is_linear"]])
 			epitopes.append(epitope)
 		return epitopes
@@ -233,11 +241,11 @@ class IEDBEpitopes:
 		assert isfile(join(self.cell_epitopes_path,
 		                   "mhc_ligand_full.csv.gz")), "AssertionError: IEDB MHC ligand assays csv was not found in {}".format(
 			self.cell_epitopes_path)
-		mhc_iedb_assays = read_csv(join(self.cell_epitopes_path, "mhc_ligand_full.csv.gz"), sep=",", header=1,
-		                           compression='gzip', iterator=True, chunksize=10000)
-		self.mhc_iedb_assays = concat(mhc_iedb_assays, ignore_index=True)
-		# self.mhc_iedb_assays = read_csv(join(self.cell_epitopes_path, "mhc_ligand_full.csv.gz"), sep=",", header=1,
-		#                                 compression='gzip', nrows=1000)
+		# mhc_iedb_assays = read_csv(join(self.cell_epitopes_path, "mhc_ligand_full.csv.gz"), sep=",", header=1,
+		#                            compression='gzip', iterator=True, chunksize=10000)
+		# self.mhc_iedb_assays = concat(mhc_iedb_assays, ignore_index=True)
+		self.mhc_iedb_assays = read_csv(join(self.cell_epitopes_path, "mhc_ligand_full.csv.gz"), sep=",", header=1,
+		                                compression='gzip', nrows=1000)
 		print("B cell subset number of non-unique epitopes: {}".format(self.bcell_iedb_assays.shape[0]))
 		print("T cell subset number of non-unique epitopes: {}".format(self.tcell_iedb_assays.shape[0]))
 		print("MHC ligand subset number of non-unique epitopes: {}".format(self.mhc_iedb_assays.shape[0]))
@@ -430,6 +438,14 @@ class IEDBEpitopes:
 		assert isdir(virus_path), "AssertionError: virus folder was not found in viruses_proteins folder"
 		self.subset_iedb_by_host_assay_type()
 		self.subset_Bcells_by_epi_type()
+		if self.host_taxon_id == "all":
+			host_name_iri_tcells = self.tcell_iedb_assays.loc[:, ['Name', 'Host IRI']]
+			host_name_iri_bcells = self.bcell_iedb_assays.loc[:, ['Name', 'Host IRI']]
+			host_name_iri_mhc = self.mhc_iedb_assays.loc[:, ['Name', 'Host IRI']]
+			host_name_iri_all_cell_types = concat([host_name_iri_tcells, host_name_iri_bcells, host_name_iri_mhc])
+			# host_name_iri_all_cell_types.to_csv(join(self.output_path, "all_cells_host_info.csv"))
+			self.extract_host_info(host_name_iri_all_cell_types)
+
 		self.process_virus_proteins(virus_path)
 
 	def write_ncbi_iedb_discordant_sequences(self):

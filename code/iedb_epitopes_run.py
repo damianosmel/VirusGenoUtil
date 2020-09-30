@@ -1,3 +1,7 @@
+import os, sys
+sys.path.insert(0, os.path.abspath(".."))
+
+
 from code.utils import create_dir
 from code.epitopes.IEDBEpitopes import IEDBEpitopes
 
@@ -12,9 +16,9 @@ from code.epitopes.IEDBEpitopes import IEDBEpitopes
 
 # input
 # local machine
-#data_path = "/home/damian/Documents/L3S/projects/sars_cov2/iedb_data"
+data_path = "/home/damian/Documents/L3S/projects/sars_cov2/iedb_data"
 # server
-data_path = "/home/melidis/ViruSurf/iedb_data"
+# data_path = "/home/melidis/ViruSurf/iedb_data"
 
 cells_epitopes_folder = "cell_epitopes"
 virus_proteins_folder = "viruses_proteins"
@@ -27,10 +31,10 @@ assay_type = "all"  # all = positive and negative
 
 # output
 # local machine
-# output_path = "/home/damian/Documents/L3S/projects/sars_cov2/IEDB_epitopes_ViruSurf_sept2020"
+output_path = "/home/damian/Documents/L3S/projects/sars_cov2/IEDB_epitopes_ViruSurf_sept2020"
 
 # server
-output_path = "/home/melidis/ViruSurf/output"
+# output_path = "/home/melidis/ViruSurf/output"
 create_dir(output_path)
 
 IEDBEpitopes = IEDBEpitopes(data_path, cells_epitopes_folder, virus_proteins_folder,ontie_download_folder,

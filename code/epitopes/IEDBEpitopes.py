@@ -220,7 +220,7 @@ class IEDBEpitopes:
 		# tcell_text_file_reader = read_csv(join(self.cell_epitopes_path, "tcell_full_v3.csv.gz"), sep=",", header=1,
 		#                                   compression='gzip', iterator=True, chunksize=1000)
 		# self.tcell_iedb_assays = concat(tcell_text_file_reader,ignore_index=True)
-		self.tcell_iedb_assays =read_csv(join(self.cell_epitopes_path, "tcell_full_v3.csv.gz"), sep=",", header=1,
+		self.tcell_iedb_assays = read_csv(join(self.cell_epitopes_path, "tcell_full_v3.csv.gz"), sep=",", header=1,
 		                                  compression='gzip')
 		assert isfile(join(self.cell_epitopes_path,
 		                   "bcell_full_v3.csv.gz")), "AssertionError: IEDB Bcell assays csv was not found in {}".format(
@@ -233,11 +233,11 @@ class IEDBEpitopes:
 		assert isfile(join(self.cell_epitopes_path,
 		                   "mhc_ligand_full.csv.gz")), "AssertionError: IEDB MHC ligand assays csv was not found in {}".format(
 			self.cell_epitopes_path)
-		mhc_iedb_assays = read_csv(join(self.cell_epitopes_path, "mhc_ligand_full.csv.gz"), sep=",", header=1,
-		                                compression='gzip',iterator=True, chunksize=10000)
-		self.mhc_iedb_assays = concat(mhc_iedb_assays,ignore_index=True)
-		# self.mhc_iedb_assays = read_csv(join(self.cell_epitopes_path, "mhc_ligand_full.csv.gz"), sep=",", header=1,
-		#                                 compression='gzip')[["Name", "Parent Species IRI", "Organism IRI", "Host IRI", "Parent Protein IRI", "Antigen Name", "Description", "Starting Position", "Ending Position", "Allele Name", "MHC allele class", "Qualitative Measure", "Number of Subjects Tested", "Number of Subjects Responded", "Reference IRI"]]
+		# mhc_iedb_assays = read_csv(join(self.cell_epitopes_path, "mhc_ligand_full.csv.gz"), sep=",", header=1,
+		#                                 compression='gzip',iterator=True, chunksize=10000)
+		# self.mhc_iedb_assays = concat(mhc_iedb_assays,ignore_index=True)
+		self.mhc_iedb_assays = read_csv(join(self.cell_epitopes_path, "mhc_ligand_full.csv.gz"), sep=",", header=1,
+		                                compression='gzip', nrows=1000)
 		print("B cell subset number of non-unique epitopes: {}".format(self.bcell_iedb_assays.shape[0]))
 		print("T cell subset number of non-unique epitopes: {}".format(self.tcell_iedb_assays.shape[0]))
 		print("MHC ligand subset number of non-unique epitopes: {}".format(self.mhc_iedb_assays.shape[0]))
@@ -258,6 +258,7 @@ class IEDBEpitopes:
 		Pandas.DataFrame
 			subset of IEDB assay
 		"""
+		print("\n ### ### New host ### ### ")
 		print("Select epitopes found only for host iri:{}".format(host_iri))
 		return iedb_assay.loc[iedb_assay["Host IRI"] == host_iri]
 
@@ -674,7 +675,6 @@ class IEDBEpitopes:
 			if response_id != "unknown":
 				print("Finding ncbi id using name: Success")
 				ncbi_id = response_id
-				print(ncbi_id)
 			else:
 				print("Finding ncbi using name: Fail")
 				print("Find by using ONTIE web API")
@@ -704,9 +704,9 @@ class IEDBEpitopes:
 		self.current_virus_epitopes = []  # clear current virus epitopes
 		self.current_virus_epi_fragments = []  # clear current virus epitope fragments
 		self.ncbi_iedb_not_equal.append("=== Virus taxid={} ===".format(self.current_virus_taxon_id))
-		# bcells_current_virus.to_csv(join(self.output_path, "bcells_virus_" + self.current_virus_taxon_id + ".csv"))
-		# tcells_current_virus.to_csv(join(self.output_path, "tcells_virus_" + self.current_virus_taxon_id + ".csv"))
-		# mhc_current_virus.to_csv(join(self.output_path, "mhc_virus_" + self.current_virus_taxon_id + ".csv"))
+		bcells_current_virus.to_csv(join(self.output_path, "bcells_virus_" + self.current_virus_taxon_id + ".csv"))
+		tcells_current_virus.to_csv(join(self.output_path, "tcells_virus_" + self.current_virus_taxon_id + ".csv"))
+		mhc_current_virus.to_csv(join(self.output_path, "mhc_virus_" + self.current_virus_taxon_id + ".csv"))
 
 		if self.host_taxon_id == "all":
 			available_hosts_bcells = self.find_unique_host_iris(bcells_current_virus)
@@ -778,7 +778,6 @@ class IEDBEpitopes:
 				# extract external links per unique epitope
 				normalized2external_links = self.find_epitope_external_links(mhc_current_protein, normalized2unique)
 
-
 				# get current host info: IRI, name and ncbi id
 				host_iri = unique(mhc_current_protein["Host IRI"])[0]
 				host_name = self.hosts_info[host_iri]['name']
@@ -793,23 +792,25 @@ class IEDBEpitopes:
 				for normalized, region in normalized2regions.items():
 					external_links = normalized2external_links[normalized]
 					reg_start, reg_end = region[0], region[-1]
-					# decrease by one the region start to convert 1-index to 0-index
-					ncbi_prot_epi = protein_record.seq[region[0] - 1:region[-1]]
-					if ncbi_prot_epi != normalized:  # append discordant epitopes
-						self.ncbi_iedb_not_equal.append(
-							"iedb frag:{}, ncbi prot:{}, iedb epitope link(s): {}".format(normalized, ncbi_prot_epi,
-							                                                              " ".join(external_links)))
+					if not (
+							reg_start == reg_end and reg_start == 0):  # if linear epitopes has known start and end positions
+						# decrease by one the region start to convert 1-index to 0-index
+						ncbi_prot_epi = protein_record.seq[region[0] - 1:region[-1]]
+						if ncbi_prot_epi != normalized:  # append discordant epitopes
+							self.ncbi_iedb_not_equal.append(
+								"iedb frag:{}, ncbi prot:{}, iedb epitope link(s): {}".format(normalized, ncbi_prot_epi,
+								                                                              " ".join(external_links)))
 
-					# create epitope object for the two possible types of assay, if are found in the data
-					epitope = Epitope(self.current_virus_taxon_id, protein.get_ncbi_id(), host_iri, host_name,
-					                  host_ncbi_id, "MHC Ligand",
-					                  normalized2allele[normalized], normalized2rf_info[normalized],
-					                  str(normalized),
-					                  reg_start, reg_end,
-					                  external_links, prediction_process, is_linear)
-					self.current_virus_epitopes.append(epitope)
-				all_attributes = self.current_virus_epitopes[-1].get_all_attributes()
-				print(all_attributes)
+						# create epitope object for the two possible types of assay, if are found in the data
+						epitope = Epitope(self.current_virus_taxon_id, protein.get_ncbi_id(), host_iri, host_name,
+						                  host_ncbi_id, "MHC Ligand",
+						                  normalized2allele[normalized], normalized2rf_info[normalized],
+						                  str(normalized),
+						                  reg_start, reg_end,
+						                  external_links, prediction_process, is_linear)
+						self.current_virus_epitopes.append(epitope)
+					all_attributes = self.current_virus_epitopes[-1].get_all_attributes()
+					print(all_attributes)
 		print("====")
 
 	def process_Bcells(self, bcells_current_virus):
@@ -874,7 +875,8 @@ class IEDBEpitopes:
 					if region[0] == -1 and region[-1] == -1:  # discontinuous epitope
 						is_linear = False
 						reg_start, reg_end = self.get_discontinous_epi_start_stop(normalized)
-					else:  # linear epitope
+					elif not (region[0] == region[-1] and region[
+						0] == 0):  # linear epitope with known start and end positions
 						is_linear = True
 						reg_start, reg_end = region[0], region[-1]
 						# decrease by one the region start to convert 1-index to 0-index
@@ -886,6 +888,9 @@ class IEDBEpitopes:
 								                                                              " ".join(
 									                                                              normalized2external_links[
 										                                                              normalized])))
+					else:
+						print("{} is a linear epitope without start and end".format(normalized))
+						continue
 					external_links = normalized2external_links[normalized]
 					epitope = Epitope(self.current_virus_taxon_id, protein.get_ncbi_id(), host_iri,
 					                  host_name, host_ncbi_id, "B cell",
@@ -915,8 +920,8 @@ class IEDBEpitopes:
 		int, int
 			discontinuous epitope start, discontinuous epitope end
 		"""
+		print("Get discontinuous epitope start stop")
 		discontinuous_epi_aa_pos = epi_description.split(",")
-		print(epi_description)
 		if epi_description[-1] != ",":
 			aa_pos_start, aa_pos_end = discontinuous_epi_aa_pos[0].strip(), discontinuous_epi_aa_pos[-1].strip()
 			pos_start = int(aa_pos_start[1:len(aa_pos_start)])
@@ -1049,6 +1054,7 @@ class IEDBEpitopes:
 				start, end = -1, -1
 				epi_regions.append([start, end])
 			else:
+				start, end = 0, 0  # default start end for linear epitopes with unknown start and end positions in the antigenic sequence
 				for _, row in iedb_assay.loc[iedb_assay["Description"] == unique].iterrows():
 					if not isnan(row["Starting Position"]):
 						start = int(row["Starting Position"])
@@ -1216,21 +1222,24 @@ class IEDBEpitopes:
 				for normalized, region in normalized2regions.items():
 					external_links = normalized2external_links[normalized]
 					reg_start, reg_end = region[0], region[-1]
-					# decrease by one the region start to convert 1-index to 0-index
-					ncbi_prot_epi = protein_record.seq[region[0] - 1:region[-1]]
-					if ncbi_prot_epi != normalized:  # append discordant epitopes
-						self.ncbi_iedb_not_equal.append(
-							"iedb frag:{}, ncbi prot:{}, iedb epitope link(s): {}".format(normalized, ncbi_prot_epi,
-							                                                              " ".join(external_links)))
 
-					# create epitope object for the two possible types of assay, if are found in the data
-					epitope = Epitope(self.current_virus_taxon_id, protein.get_ncbi_id(), host_iri,
-					                  host_name, host_ncbi_id, "T cell",
-					                  normalized2allele[normalized], normalized2rf_info[normalized],
-					                  str(normalized),
-					                  reg_start, reg_end,
-					                  external_links, prediction_process, is_linear)
-					self.current_virus_epitopes.append(epitope)
+					if not (
+							reg_start == reg_end and reg_start == 0):  # if linear epitopes has known start and end positions
+						# decrease by one the region start to convert 1-index to 0-index
+						ncbi_prot_epi = protein_record.seq[region[0] - 1:region[-1]]
+						if ncbi_prot_epi != normalized:  # append discordant epitopes
+							self.ncbi_iedb_not_equal.append(
+								"iedb frag:{}, ncbi prot:{}, iedb epitope link(s): {}".format(normalized, ncbi_prot_epi,
+								                                                              " ".join(external_links)))
+
+						# create epitope object for the two possible types of assay, if are found in the data
+						epitope = Epitope(self.current_virus_taxon_id, protein.get_ncbi_id(), host_iri,
+						                  host_name, host_ncbi_id, "T cell",
+						                  normalized2allele[normalized], normalized2rf_info[normalized],
+						                  str(normalized),
+						                  reg_start, reg_end,
+						                  external_links, prediction_process, is_linear)
+						self.current_virus_epitopes.append(epitope)
 				all_attributes = self.current_virus_epitopes[-1].get_all_attributes()
 				print(all_attributes)
 		print("====")

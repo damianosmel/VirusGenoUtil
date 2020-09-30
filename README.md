@@ -84,7 +84,7 @@ BepiPred-2.0 -t 0.55 sars\_cov2\_proteins/sars\_cov2\_struct\_prot.fasta > bepip
 
    ls -lh sars\_cov2/pred\_epitopes/bepipred/bepipred\_sars\_cov2\_epi.tsv
 
-### Extract epitopes from IEDB
+## Extract epitopes from IEDB
 IEDB data
 * go to iedb database export ["page"](http://www.iedb.org/database_export_v3.php)
 * download the B and T cells and the mhc_ligan_full(single file) csv.zip files.

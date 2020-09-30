@@ -233,11 +233,11 @@ class IEDBEpitopes:
 		assert isfile(join(self.cell_epitopes_path,
 		                   "mhc_ligand_full.csv.gz")), "AssertionError: IEDB MHC ligand assays csv was not found in {}".format(
 			self.cell_epitopes_path)
-		# mhc_iedb_assays = read_csv(join(self.cell_epitopes_path, "mhc_ligand_full.csv.gz"), sep=",", header=1,
-		#                                 compression='gzip',iterator=True, chunksize=10000)
-		# self.mhc_iedb_assays = concat(mhc_iedb_assays,ignore_index=True)
-		self.mhc_iedb_assays = read_csv(join(self.cell_epitopes_path, "mhc_ligand_full.csv.gz"), sep=",", header=1,
-		                                compression='gzip', nrows=1000)
+		mhc_iedb_assays = read_csv(join(self.cell_epitopes_path, "mhc_ligand_full.csv.gz"), sep=",", header=1,
+		                           compression='gzip', iterator=True, chunksize=10000)
+		self.mhc_iedb_assays = concat(mhc_iedb_assays, ignore_index=True)
+		# self.mhc_iedb_assays = read_csv(join(self.cell_epitopes_path, "mhc_ligand_full.csv.gz"), sep=",", header=1,
+		#                                 compression='gzip', nrows=1000)
 		print("B cell subset number of non-unique epitopes: {}".format(self.bcell_iedb_assays.shape[0]))
 		print("T cell subset number of non-unique epitopes: {}".format(self.tcell_iedb_assays.shape[0]))
 		print("MHC ligand subset number of non-unique epitopes: {}".format(self.mhc_iedb_assays.shape[0]))
@@ -666,18 +666,13 @@ class IEDBEpitopes:
 		print("Extract host ncbi id")
 		# first try to see if you have ncbi id in the host iri
 		if "NCBITaxon" in str(host_iri):  # extract existing ncbi taxon id
-			print("Get ncbi id from iri")
 			ncbi_id = str(host_iri).split("NCBITaxon_")[1]
 		else:
-			print("ncbi id not in iri")
 			# second try retrieving ncbi from the host name
 			response_id = self.retrieve_ncbi_id_from_name(host_name)
 			if response_id != "unknown":
-				print("Finding ncbi id using name: Success")
 				ncbi_id = response_id
-			else:
-				print("Finding ncbi using name: Fail")
-				print("Find by using ONTIE web API")
+			else:  # third try: find ONTIE from web API
 				assert "ONTIE" in str(host_iri), "AssertError: ONTIE not in iri"
 				ontie_id = "ONTIE_" + str(host_iri).split("ONTIE_")[1]
 				ncbi_id = self.retrieve_ncbi4ontie(ontie_id)
